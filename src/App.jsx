@@ -223,9 +223,9 @@ function App() {
         </button>
         <nav aria-label="Main navigation">
           <button onClick={() => navigate('booking')}>Book</button>
+          <button onClick={() => navigate('tracking')}>Track</button>
           <button onClick={() => navigate('courts')}>Our Courts</button>
           <button onClick={() => navigate('location')}>Location</button>
-          <button onClick={() => navigate('tracking')}>Track Booking</button>
         </nav>
       </header>
 
