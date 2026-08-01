@@ -343,7 +343,7 @@ function App() {
       <footer>
         <div className="footer-brand"><div className="footer-logo-lockup"><img src="/footer-logo-black.png" alt="Pickle Point Arena Valencia Bukidnon" /></div></div>
         <div><strong>Hours</strong><span>Monday–Sunday</span><span>6:00 AM–2:00 AM</span></div>
-        <div><strong>Rates</strong><span>₱300 · 6 AM–4 PM</span><span>₱350 · 5 PM–2 AM</span></div>
+        <div><strong>Rates</strong><span>₱300 · 6AM - 4PM</span><span>₱350 · 4PM - 2AM</span></div>
         <div><strong>Quick links</strong><button onClick={() => navigate('booking')}>Book a court</button><button onClick={() => navigate('tracking')}>Track booking</button></div>
         <div><strong>Contact</strong><a href="mailto:picklepointarenabukidnon@gmail.com">picklepointarenabukidnon@gmail.com</a><a href="https://www.facebook.com/profile.php?id=61591695621672&sk=photos" target="_blank" rel="noreferrer">Facebook page ↗</a><a href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer">Guinoyuran Rd, Valencia City ↗</a></div>
       </footer>
@@ -522,7 +522,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
     .sort((first, second) => first.order - second.order);
   const rental = selectedForDate.reduce((sum, key) => {
     const hour = Number(key.split('|')[1]);
-    return sum + (hour < 17 ? 300 : 350);
+    return sum + (hour < 16 ? 300 : 350);
   }, 0);
   const total = rental + (selectedForDate.length ? 10 : 0);
   const customerReady = customerName.trim().length > 1 && /^\S+@\S+\.\S+$/.test(customerEmail);
@@ -608,7 +608,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       <div className="calendar-toolbar">
         <div className="calendar-date-controls"><button className="refresh-button" aria-label="Refresh availability" onClick={refreshAvailability} disabled={availabilityLoading}>{availabilityLoading ? '…' : '↻'}</button><label className="date-picker">Select date<input type="date" min={today} value={selectedDate} onChange={(event) => chooseDate(event.target.value)} /></label></div>
         <a className="find-booking open-play-link" href="https://reclub.co/clubs/@pickle-point-arena" target="_blank" rel="noopener noreferrer">Join Open Play <span>↗</span></a>
-        <div className="rate-guide"><span><b>₱300</b> 6 AM–4 PM</span><span><b>₱350</b> 5 PM–2 AM</span></div>
+        <div className="rate-guide"><span><b>₱300</b> 6AM - 4PM</span><span><b>₱350</b> 4PM - 2AM</span></div>
       </div>
 
       {recentSubmissions.length > 0 && <div className="submission-history">{recentSubmissions.map((submission, index) => <aside className="submission-receipt" role={index === 0 ? 'status' : undefined} key={`${submission.trackingNumber}-${submission.submittedAt}`}><span className="result-icon">✓</span><div><small>PAYMENT PROOF SUBMITTED · PENDING REVIEW</small><strong>{submission.trackingNumber}</strong><p>{submission.customerName} · {submission.courtHours} court-hour{submission.courtHours === 1 ? '' : 's'} · ₱{Number(submission.totalAmount).toLocaleString()}</p><time dateTime={submission.submittedAt}>{activityTimestamp(submission.submittedAt)} Philippine time</time>{index === 0 && <em>The previous selection was cleared. Select another white slot to create a new booking with a different tracking number.</em>}</div><div><button type="button" onClick={() => navigator.clipboard?.writeText(submission.trackingNumber)}>Copy tracking</button><button type="button" onClick={() => setRecentSubmissions((current) => current.filter((item) => item.trackingNumber !== submission.trackingNumber))}>Dismiss</button></div></aside>)}</div>}
