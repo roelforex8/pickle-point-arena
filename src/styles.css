@@ -82,19 +82,19 @@ button { cursor: pointer; }
 .court-ball i:nth-child(2) { right: 13px; top: 23px; }
 .court-ball i:nth-child(3) { left: 23px; bottom: 10px; }
 .court-label { position: absolute; left: 9%; bottom: 9%; z-index: 4; color: rgba(255,255,255,.9); font-size: 11px; letter-spacing: .25em; font-weight: bold; text-shadow: 0 1px 5px rgba(0,0,0,.8); }
-.hero-icon-link { position: absolute; z-index: 7; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 5px; background: white; box-shadow: 0 14px 30px rgba(0,0,0,.28); text-decoration: none; transition: transform .2s ease, box-shadow .2s ease; }
+.hero-icon-link { position: absolute; z-index: 9; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 5px; background: white; box-shadow: 0 14px 30px rgba(0,0,0,.28); text-decoration: none; transition: transform .2s ease, box-shadow .2s ease; }
 .hero-icon-link:hover, .hero-icon-link:focus-visible { box-shadow: 0 17px 34px rgba(0,0,0,.38); outline: 3px solid rgba(255,255,255,.6); outline-offset: 3px; }
 .facebook-link { left: 7%; top: 7%; transform: rotate(-7deg); }
 .facebook-link:hover, .facebook-link:focus-visible { transform: rotate(-7deg) scale(1.08); }
 .facebook-link span { width: 30px; height: 30px; display: grid; place-items: end center; overflow: hidden; border-radius: 50%; background: #1877f2; color: white; font: 900 29px/1 Arial, sans-serif; }
-.location-link { right: 2%; bottom: 27%; transform: rotate(-7deg); }
+.location-link { right: 5%; bottom: 24%; transform: rotate(-7deg); }
 .location-link:hover, .location-link:focus-visible { transform: rotate(-7deg) scale(1.08); }
 .location-pin-icon { position: relative; width: 25px; height: 25px; display: block; border-radius: 50% 50% 50% 0; background: #e23b2f; transform: rotate(-45deg); box-shadow: 0 3px 7px rgba(0,0,0,.22); }
 .location-pin-icon i { position: absolute; width: 8px; height: 8px; left: 8px; top: 8px; border-radius: 50%; background: white; }
-.availability-pill, .rate-pill { position: absolute; background: white; color: var(--ink); border-radius: 3px; padding: 13px 17px; box-shadow: 0 16px 35px rgba(0,0,0,.23); font-size: 12px; font-weight: 800; }
+.availability-pill, .rate-pill { position: absolute; z-index: 8; background: white; color: var(--ink); border-radius: 3px; padding: 13px 17px; box-shadow: 0 16px 35px rgba(0,0,0,.23); font-size: 12px; font-weight: 800; }
 .availability-pill { left: 2%; top: 17%; }
 .availability-pill span { width: 8px; height: 8px; border-radius: 50%; background: #67a554; display: inline-block; margin-right: 6px; }
-.rate-pill { right: 0; bottom: 12%; display: flex; flex-direction: column; gap: 3px; }
+.rate-pill { right: 1%; bottom: 8%; display: flex; flex-direction: column; gap: 3px; }
 .rate-pill small { color: #767e76; font-size: 8px; letter-spacing: .15em; }
 .rate-pill strong { font-size: 21px; }
 
