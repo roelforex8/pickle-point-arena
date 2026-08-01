@@ -1114,6 +1114,8 @@ footer > div a:hover, footer > div a:focus-visible { color: white; text-decorati
   .admin-login-header, .admin-portal-header { padding: 0 18px; }
   .admin-login-header > a:last-child { font-size: 9px; }
   .admin-login-layout { padding: 50px 18px; }
+  .admin-login-layout > .admin-login-card { grid-row: 1; }
+  .admin-login-layout > .admin-login-copy { grid-row: 2; }
   .admin-login-copy h1 { font-size: 53px; }
   .role-explainer, .preview-buttons { grid-template-columns: 1fr; }
   .admin-login-card { padding: 27px 20px; }
