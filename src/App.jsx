@@ -499,10 +499,10 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
     .sort((first, second) => first.order - second.order);
   const rental = selectedForDate.reduce((sum, key) => {
     const hour = Number(key.split('|')[1]);
-    return sum + (hour < 16 ? 300 : 350);
+    return sum + (hour >= 6 && hour < 16 ? 300 : 350);
   }, 0);
   const selectedCourtCount = new Set(selectedForDate.map((key) => key.split('|')[2])).size;
-  const bookingFee = selectedCourtCount * 10;
+  const bookingFee = selectedForDate.length * 10;
   const total = rental + bookingFee;
   const customerReady = customerName.trim().length > 1 && /^\S+@\S+\.\S+$/.test(customerEmail);
   const paymentReady = paymentReference.trim().length > 2 && proofFile;
@@ -618,20 +618,19 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       </div>
 
       <div className="booking-dock">
-        <div><small>YOUR SELECTION</small><strong>{selectedForDate.length} {selectedForDate.length === 1 ? 'court-hour' : 'court-hours'}</strong><span>{selectedForDate.length ? 'Multiple courts and consecutive times are allowed.' : 'Tap any white slot to begin.'}</span></div>
-        <div className="dock-total"><small>₱10 FEE PER COURT INCLUDED</small><strong>₱{total.toLocaleString()}</strong></div>
-        <button className="primary" onClick={startCheckout}>Continue to customer details <span>→</span></button>
+        <div><small>YOUR SELECTION</small><strong>{selectedCourtCount} {selectedCourtCount === 1 ? 'court' : 'courts'} - {selectedForDate.length} {selectedForDate.length === 1 ? 'slot' : 'slots'}</strong><span className={selectedForDate.length ? 'selection-total' : ''}>{selectedForDate.length ? `Total amount: ₱${total.toLocaleString()}` : 'Tap any white slot to begin.'}</span></div>
+        <button className="primary" onClick={startCheckout}>Book Now <span>→</span></button>
       </div>
       {selectionMessage && <p className="selection-message" role="alert">{selectionMessage}</p>}
       <p className="booking-policy">Selected slots are held for 15 minutes after reservation. Full payment is required. All confirmed bookings are non-refundable and cannot be cancelled.</p>
 
       {checkoutOpen && selectedForDate.length > 0 && <section className="checkout-panel">
-        <div className="checkout-heading"><div><span className="eyebrow dark">LIVE BOOKING</span><h3>{checkoutStage === 'details' ? 'Customer details.' : checkoutStage === 'payment' ? 'Pay and submit proof.' : 'Payment submitted.'}</h3><p>Your reservation, payment reference, and receipt are securely stored for Owner/Admin review.</p></div><button onClick={() => setCheckoutOpen(false)} aria-label="Close checkout">×</button></div>
+        <div className="checkout-heading"><div><span className="eyebrow dark">LIVE BOOKING</span><h3>{checkoutStage === 'details' ? 'Book Now' : checkoutStage === 'payment' ? 'Pay and submit proof.' : 'Payment submitted.'}</h3><p>Your reservation, payment reference, and receipt are securely stored for Owner/Admin review.</p></div><button onClick={() => setCheckoutOpen(false)} aria-label="Close checkout">×</button></div>
 
         {checkoutStage === 'details' && <>
           <div className="checkout-grid">
             <div className="customer-form"><span className="step-number">01</span><h4>Customer details</h4><label>Full name<input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Customer full name" autoComplete="name" /></label><label>Email address<input type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="customer@email.com" autoComplete="email" /></label><p>Booking updates and the tracking number will be sent to this email.</p></div>
-            <div className="order-review"><span className="step-number">BOOKING SUMMARY</span><h4>{selectedForDate.length} {selectedForDate.length === 1 ? 'court-hour' : 'court-hours'} selected</h4><p>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p><div className="checkout-total"><span>Court rental</span><b>₱{rental.toLocaleString()}</b><span>Booking fee ({selectedCourtCount} court{selectedCourtCount === 1 ? '' : 's'} × ₱10)</span><b>₱{bookingFee.toLocaleString()}</b><small>Total payment</small><strong>₱{total.toLocaleString()}</strong></div></div>
+            <div className="order-review"><span className="step-number">BOOKING SUMMARY</span><h4>{selectedCourtCount} {selectedCourtCount === 1 ? 'court' : 'courts'} - {selectedForDate.length} {selectedForDate.length === 1 ? 'slot' : 'slots'}</h4><p>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p><div className="checkout-total"><span>Total Payment</span><strong>₱{total.toLocaleString()}</strong></div></div>
           </div>
           <div className="checkout-footer"><p>Continuing creates a real 15-minute reservation hold for these court slots.</p><button className="primary" disabled={!customerReady || bookingSubmitting} onClick={createReservation}>{bookingSubmitting ? 'Reserving slots…' : 'Reserve and continue to payment'} <span>→</span></button></div>
         </>}
