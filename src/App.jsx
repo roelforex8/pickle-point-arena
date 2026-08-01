@@ -4,6 +4,12 @@ import { supabase } from './supabase';
 const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
 const courtGalleryPhotos = [
   {
+    src: '/arena-covered-courts-v1.png?v=20260801',
+    alt: 'Covered indoor pickleball courts beneath the steel-truss roof at Pickle Point Arena',
+    label: 'INDOOR COURTS',
+    title: 'Covered courts',
+  },
+  {
     src: '/arena-overview-vertical-v1.png?v=20260801',
     alt: 'Vertical architectural overview of Pickle Point Arena showing Courts 1 through 6, Court 5 rotated at the right, the player seating area, and the branded arena wall',
     label: 'ARENA OVERVIEW',
