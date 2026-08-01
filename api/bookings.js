@@ -16,20 +16,23 @@ export default async function handler(request, response) {
     if (error) return sendJson(response, 400, { error: error.message });
     const booking = data?.[0];
     if (!booking) throw new Error('The reservation was not created.');
+    const courtCount = new Set(slots.map((slot) => slot.court_id)).size;
+    const bookingFee = courtCount * 10;
+    const totalAmount = Number(booking.subtotal) + bookingFee;
     const holdExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     const { data: updatedBooking, error: holdError } = await admin
       .from('bookings')
-      .update({ hold_expires_at: holdExpiresAt })
+      .update({ hold_expires_at: holdExpiresAt, booking_fee: bookingFee, total_amount: totalAmount })
       .eq('id', booking.booking_id)
-      .select('hold_expires_at')
+      .select('hold_expires_at, booking_fee, total_amount')
       .single();
     if (holdError) throw holdError;
     return sendJson(response, 201, {
       bookingId: booking.booking_id,
       trackingNumber: booking.tracking_number,
       subtotal: Number(booking.subtotal),
-      bookingFee: Number(booking.booking_fee),
-      totalAmount: Number(booking.total_amount),
+      bookingFee: Number(updatedBooking.booking_fee),
+      totalAmount: Number(updatedBooking.total_amount),
       holdExpiresAt: updatedBooking.hold_expires_at,
     });
   } catch (error) {

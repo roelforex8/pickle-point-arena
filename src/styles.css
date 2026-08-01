@@ -58,7 +58,13 @@ button { cursor: pointer; }
 .hero-facts span { color: #849087; font-size: 12px; }
 .hero-visual { min-height: 530px; position: relative; display: grid; place-items: center; }
 .sun-orb { position: absolute; width: 430px; height: 430px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #e17142, var(--orange) 45%, #8d2e10); filter: saturate(.9); }
-.court-card { width: min(520px, 92%); aspect-ratio: 4 / 3; position: relative; overflow: hidden; }
+.hero-back-photo, .court-card { grid-area: 1 / 1; aspect-ratio: 4 / 3; }
+.hero-back-photo { width: min(520px, 78%); position: relative; z-index: 1; overflow: hidden; background: #20251f; border: 3px solid rgba(255,255,255,.16); box-shadow: 0 24px 55px rgba(0,0,0,.48); pointer-events: none; }
+.hero-back-photo img { width: 100%; height: 100%; display: block; object-fit: cover; filter: blur(8px) brightness(.5) saturate(.65); opacity: .92; transform: scale(1.12); }
+.hero-back-photo-left { transform: translate(-16%, -8%) rotate(-8deg); }
+.hero-back-photo-right { z-index: 2; transform: translate(16%, -4%) rotate(7deg); }
+.hero-back-photo-bottom { transform: translate(-2%, 13%) rotate(-4deg); }
+.court-card { width: min(520px, 78%); position: relative; z-index: 3; overflow: hidden; background: #171a16; box-shadow: 0 30px 65px rgba(0,0,0,.5); }
 .court-photo { position: absolute; inset: 0; overflow: hidden; background: transparent; }
 .court-photo::after { display: none; }
 .court-photo img { width: 100%; height: 100%; display: block; object-fit: cover; }

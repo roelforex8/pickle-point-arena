@@ -172,6 +172,7 @@ function App() {
   const [heroPhotoIndex, setHeroPhotoIndex] = useState(0);
   const [trackingHandoff, setTrackingHandoff] = useState(null);
   const heroPointerStartX = useRef(null);
+  const courtsOpenTonight = courtNames.length;
 
   useEffect(() => {
     const timer = window.setInterval(() => setHeroPhotoIndex((current) => (current + 1) % heroCourtPhotos.length), 5000);
@@ -237,6 +238,15 @@ function App() {
         </div>
 
         <div className="hero-visual" aria-label="Pickle Point Arena photo gallery">
+          <div className="hero-back-photo hero-back-photo-left" aria-hidden="true">
+            <img src={heroCourtPhotos[(heroPhotoIndex + heroCourtPhotos.length - 1) % heroCourtPhotos.length].src} alt="" draggable="false" />
+          </div>
+          <div className="hero-back-photo hero-back-photo-right" aria-hidden="true">
+            <img src={heroCourtPhotos[(heroPhotoIndex + 1) % heroCourtPhotos.length].src} alt="" draggable="false" />
+          </div>
+          <div className="hero-back-photo hero-back-photo-bottom" aria-hidden="true">
+            <img src={heroCourtPhotos[(heroPhotoIndex + 2) % heroCourtPhotos.length].src} alt="" draggable="false" />
+          </div>
           <div className="court-card">
             <div
               className={`court-photo court-photo-interactive${heroCourtPhotos[heroPhotoIndex].fit === 'contain' || heroCourtPhotos[heroPhotoIndex].src.includes('floor-plan') ? ' court-photo-contain' : ''}`}
@@ -265,6 +275,10 @@ function App() {
               />
             </div>
           </div>
+          <a className="hero-icon-link facebook-link" href="https://www.facebook.com/profile.php?id=61591695621672&sk=photos" target="_blank" rel="noreferrer" aria-label="Open Pickle Point Arena on Facebook"><span>f</span></a>
+          <div className="availability-pill"><span /> {courtsOpenTonight} courts open tonight</div>
+          <a className="hero-icon-link location-link" href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer" aria-label="Open Pickle Point Arena location in Google Maps"><span className="location-pin-icon"><i /></span></a>
+          <div className="rate-pill"><small>EVENING RATE</small><strong>₱350/hr</strong></div>
         </div>
       </section>
 
@@ -487,7 +501,9 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
     const hour = Number(key.split('|')[1]);
     return sum + (hour < 16 ? 300 : 350);
   }, 0);
-  const total = rental + (selectedForDate.length ? 10 : 0);
+  const selectedCourtCount = new Set(selectedForDate.map((key) => key.split('|')[2])).size;
+  const bookingFee = selectedCourtCount * 10;
+  const total = rental + bookingFee;
   const customerReady = customerName.trim().length > 1 && /^\S+@\S+\.\S+$/.test(customerEmail);
   const paymentReady = paymentReference.trim().length > 2 && proofFile;
 
@@ -603,7 +619,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
 
       <div className="booking-dock">
         <div><small>YOUR SELECTION</small><strong>{selectedForDate.length} {selectedForDate.length === 1 ? 'court-hour' : 'court-hours'}</strong><span>{selectedForDate.length ? 'Multiple courts and consecutive times are allowed.' : 'Tap any white slot to begin.'}</span></div>
-        <div className="dock-total"><small>BOOKING FEE INCLUDED</small><strong>₱{total.toLocaleString()}</strong></div>
+        <div className="dock-total"><small>₱10 FEE PER COURT INCLUDED</small><strong>₱{total.toLocaleString()}</strong></div>
         <button className="primary" onClick={startCheckout}>Continue to customer details <span>→</span></button>
       </div>
       {selectionMessage && <p className="selection-message" role="alert">{selectionMessage}</p>}
@@ -615,7 +631,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
         {checkoutStage === 'details' && <>
           <div className="checkout-grid">
             <div className="customer-form"><span className="step-number">01</span><h4>Customer details</h4><label>Full name<input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Customer full name" autoComplete="name" /></label><label>Email address<input type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="customer@email.com" autoComplete="email" /></label><p>Booking updates and the tracking number will be sent to this email.</p></div>
-            <div className="order-review"><span className="step-number">BOOKING SUMMARY</span><h4>{selectedForDate.length} {selectedForDate.length === 1 ? 'court-hour' : 'court-hours'} selected</h4><p>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p><div className="checkout-total"><span>Court rental</span><b>₱{rental.toLocaleString()}</b><span>Booking fee</span><b>₱10</b><small>Total payment</small><strong>₱{total.toLocaleString()}</strong></div></div>
+            <div className="order-review"><span className="step-number">BOOKING SUMMARY</span><h4>{selectedForDate.length} {selectedForDate.length === 1 ? 'court-hour' : 'court-hours'} selected</h4><p>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p><div className="checkout-total"><span>Court rental</span><b>₱{rental.toLocaleString()}</b><span>Booking fee ({selectedCourtCount} court{selectedCourtCount === 1 ? '' : 's'} × ₱10)</span><b>₱{bookingFee.toLocaleString()}</b><small>Total payment</small><strong>₱{total.toLocaleString()}</strong></div></div>
           </div>
           <div className="checkout-footer"><p>Continuing creates a real 15-minute reservation hold for these court slots.</p><button className="primary" disabled={!customerReady || bookingSubmitting} onClick={createReservation}>{bookingSubmitting ? 'Reserving slots…' : 'Reserve and continue to payment'} <span>→</span></button></div>
         </>}
