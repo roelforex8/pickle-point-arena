@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './supabase';
 
 const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
-const heroCourtPhotos = ['/court-gallery-01.png', '/court-gallery-02.png'];
 const courtGalleryPhotos = [
   {
     src: '/court-floor-plan-photoreal-v12.png?v=20260801-validated-layout',
@@ -35,6 +34,7 @@ const courtGalleryPhotos = [
     title: 'Complete court layout',
   },
 ];
+const heroCourtPhotos = courtGalleryPhotos;
 const hours = Array.from({ length: 20 }, (_, index) => (6 + index) % 24);
 
 const statusDetails = {
@@ -254,7 +254,7 @@ function App() {
           <div className="sun-orb" />
           <div className="court-card">
             <div
-              className="court-photo court-photo-interactive"
+              className={`court-photo court-photo-interactive${heroCourtPhotos[heroPhotoIndex].src.includes('floor-plan') ? ' court-photo-contain' : ''}`}
               role="button"
               tabIndex="0"
               aria-label="Court photo gallery. Click, tap, or swipe to show another photo."
@@ -274,15 +274,15 @@ function App() {
               }}
             >
               <img
-                src={heroCourtPhotos[heroPhotoIndex]}
-                alt={`Pickle Point Arena court view ${heroPhotoIndex + 1} of ${heroCourtPhotos.length}`}
+                src={heroCourtPhotos[heroPhotoIndex].src}
+                alt={`${heroCourtPhotos[heroPhotoIndex].alt}. Image ${heroPhotoIndex + 1} of ${heroCourtPhotos.length}`}
                 draggable="false"
               />
             </div>
             <div className="court-grid"><span /><span /><span /><span /></div>
             <div className="net" />
             <div className="court-ball"><i /><i /><i /></div>
-            <span className="court-label">COURT 03</span>
+            <span className="court-label">{heroCourtPhotos[heroPhotoIndex].label}</span>
           </div>
           <a className="hero-icon-link facebook-link" href="https://www.facebook.com/profile.php?id=61591695621672&sk=photos" target="_blank" rel="noreferrer" aria-label="Open Pickle Point Arena on Facebook"><span>f</span></a>
           <div className="availability-pill"><span /> {courtsOpenTonight} {courtsOpenTonight === 1 ? 'court' : 'courts'} open tonight</div>

@@ -62,6 +62,8 @@ button { cursor: pointer; }
 .court-photo { position: absolute; inset: 7%; overflow: hidden; background: var(--forest); }
 .court-photo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12,31,23,.16), rgba(12,31,23,.38)); pointer-events: none; }
 .court-photo img { width: 100%; height: 100%; display: block; object-fit: cover; filter: saturate(.88) contrast(.94); }
+.court-photo-contain { background: #171a16; }
+.court-photo-contain img { object-fit: contain; }
 .court-photo-interactive { cursor: pointer; touch-action: pan-y; user-select: none; }
 .court-photo-interactive:active { cursor: grabbing; }
 .court-photo-interactive:focus-visible { outline: 3px solid rgba(255,255,255,.85); outline-offset: 3px; }
