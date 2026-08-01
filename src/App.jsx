@@ -10,13 +10,6 @@ const courtGalleryPhotos = [
     title: 'Covered courts',
   },
   {
-    src: '/arena-overview-vertical-v1.png?v=20260801',
-    alt: 'Vertical architectural overview of Pickle Point Arena showing Courts 1 through 6, Court 5 rotated at the right, the player seating area, and the branded arena wall',
-    label: 'ARENA OVERVIEW',
-    fit: 'contain',
-    title: 'Courts 1–6 overview',
-  },
-  {
     src: '/court-action-wide-v1.png?v=20260801',
     alt: 'Three players enjoying a pickleball game on Court 3 in front of the Pickle Point Arena service window and branded wall',
     label: 'COURT 3 · ACTION VIEW',
