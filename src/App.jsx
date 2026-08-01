@@ -23,18 +23,6 @@ const courtGalleryPhotos = [
     title: 'Play at Court 3',
   },
   {
-    src: '/court-four-amenities-v1.png?v=20260801',
-    alt: 'Court 4 beside the Pickle Point Arena service counter, branded wall, refrigerator, tables, and planted player lounge',
-    label: 'COURT 4 · AMENITIES',
-    title: 'Court 4 & player lounge',
-  },
-  {
-    src: '/arena-overview-wide-v1.png?v=20260801',
-    alt: 'Wide architectural overview of Pickle Point Arena showing the complete six-court arrangement and player amenities',
-    label: 'ARENA OVERVIEW',
-    title: 'Complete arena',
-  },
-  {
     src: '/court-gallery-01.png',
     alt: 'Wide view of the covered pickleball courts at Pickle Point Arena',
     label: 'COURT PHOTO',
@@ -45,12 +33,6 @@ const courtGalleryPhotos = [
     alt: 'Pickleball court view inside Pickle Point Arena',
     label: 'COURT PHOTO',
     title: 'Court view',
-  },
-  {
-    src: '/court-floor-plan-enhanced-v10.png?v=20260801',
-    alt: 'Enhanced top-down floor plan of Pickle Point Arena preserving the complete twelve-court layout, court numbering, entrances, aisles, and service area',
-    label: 'ARENA FLOOR PLAN',
-    title: 'Complete court layout',
   },
 ];
 const heroCourtPhotos = courtGalleryPhotos;
