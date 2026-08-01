@@ -17,8 +17,10 @@ export default async function handler(request, response) {
     return sendJson(response, 405, { error: 'Method not allowed.' });
   }
 
+  let admin;
+  let createdBookingId;
   try {
-    const admin = getAdminClient();
+    admin = getAdminClient();
     const body = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : (request.body || {});
     const customerName = String(body.customerName || '').trim();
     const customerEmail = String(body.customerEmail || '').trim().toLowerCase();
@@ -27,6 +29,7 @@ export default async function handler(request, response) {
     if (error) return sendJson(response, 400, { error: error.message });
     const booking = data?.[0];
     if (!booking) throw new Error('The reservation was not created.');
+    createdBookingId = booking.booking_id;
     const { data: createdSlots, error: slotsError } = await admin
       .from('booking_slots')
       .select('id, slot_start')
@@ -39,11 +42,10 @@ export default async function handler(request, response) {
     if (slotUpdateError) throw slotUpdateError;
     const subtotal = pricedSlots.reduce((sum, slot) => sum + slot.hourlyRate, 0);
     const bookingFee = pricedSlots.length * 10;
-    const totalAmount = subtotal + bookingFee;
     const holdExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     const { data: updatedBooking, error: holdError } = await admin
       .from('bookings')
-      .update({ hold_expires_at: holdExpiresAt, subtotal, booking_fee: bookingFee, total_amount: totalAmount })
+      .update({ hold_expires_at: holdExpiresAt, subtotal, booking_fee: bookingFee })
       .eq('id', booking.booking_id)
       .select('hold_expires_at, subtotal, booking_fee, total_amount')
       .single();
@@ -57,6 +59,12 @@ export default async function handler(request, response) {
       holdExpiresAt: updatedBooking.hold_expires_at,
     });
   } catch (error) {
+    if (admin && createdBookingId) {
+      await Promise.all([
+        admin.from('booking_slots').update({ status: 'expired' }).eq('booking_id', createdBookingId).eq('status', 'held'),
+        admin.from('bookings').update({ status: 'expired' }).eq('id', createdBookingId).eq('status', 'awaiting_payment'),
+      ]);
+    }
     return sendJson(response, 500, { error: error.message || 'The reservation could not be created.' });
   }
 }
