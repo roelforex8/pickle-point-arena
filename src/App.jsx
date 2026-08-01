@@ -4,16 +4,29 @@ import { supabase } from './supabase';
 const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
 const courtGalleryPhotos = [
   {
-    src: '/court-floor-plan-photoreal-v12.png?v=20260801-validated-layout',
-    alt: 'Photorealistic architectural view aligned to the Pickle Point Arena floor plan, with complete equal-size courts, Court 5 rotated beside Courts 1 and 2, and the branded arena wall outside the court aisles',
-    label: 'PHOTOREALISTIC 3D FLOOR PLAN',
+    src: '/arena-overview-vertical-v1.png?v=20260801',
+    alt: 'Vertical architectural overview of Pickle Point Arena showing Courts 1 through 6, Court 5 rotated at the right, the player seating area, and the branded arena wall',
+    label: 'ARENA OVERVIEW',
+    fit: 'contain',
     title: 'Courts 1–6 overview',
   },
   {
-    src: '/court-wall-view-v5.png',
-    alt: 'Court 3 viewed along its playing axis toward the Pickle Point Arena service window, branded wall, and refrigerator directly beyond the far baseline',
-    label: 'COURT 3 · 3D WALL VIEW',
-    title: 'Court 3 & arena wall',
+    src: '/court-action-wide-v1.png?v=20260801',
+    alt: 'Three players enjoying a pickleball game on Court 3 in front of the Pickle Point Arena service window and branded wall',
+    label: 'COURT 3 · ACTION VIEW',
+    title: 'Play at Court 3',
+  },
+  {
+    src: '/court-four-amenities-v1.png?v=20260801',
+    alt: 'Court 4 beside the Pickle Point Arena service counter, branded wall, refrigerator, tables, and planted player lounge',
+    label: 'COURT 4 · AMENITIES',
+    title: 'Court 4 & player lounge',
+  },
+  {
+    src: '/arena-overview-wide-v1.png?v=20260801',
+    alt: 'Wide architectural overview of Pickle Point Arena showing the complete six-court arrangement and player amenities',
+    label: 'ARENA OVERVIEW',
+    title: 'Complete arena',
   },
   {
     src: '/court-gallery-01.png',
@@ -254,7 +267,7 @@ function App() {
           <div className="sun-orb" />
           <div className="court-card">
             <div
-              className={`court-photo court-photo-interactive${heroCourtPhotos[heroPhotoIndex].src.includes('floor-plan') ? ' court-photo-contain' : ''}`}
+              className={`court-photo court-photo-interactive${heroCourtPhotos[heroPhotoIndex].fit === 'contain' || heroCourtPhotos[heroPhotoIndex].src.includes('floor-plan') ? ' court-photo-contain' : ''}`}
               role="button"
               tabIndex="0"
               aria-label="Court photo gallery. Click, tap, or swipe to show another photo."
