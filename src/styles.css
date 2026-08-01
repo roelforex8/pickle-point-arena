@@ -58,10 +58,10 @@ button { cursor: pointer; }
 .hero-facts span { color: #849087; font-size: 12px; }
 .hero-visual { min-height: 530px; position: relative; display: grid; place-items: center; }
 .sun-orb { position: absolute; width: 430px; height: 430px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #e17142, var(--orange) 45%, #8d2e10); filter: saturate(.9); }
-.court-card { width: min(470px, 88%); aspect-ratio: .98; transform: rotate(-7deg); background: var(--forest); border: 10px solid #d6d7c8; position: relative; box-shadow: 0 35px 70px rgba(0,0,0,.34); overflow: hidden; }
-.court-photo { position: absolute; inset: 7%; overflow: hidden; background: var(--forest); }
-.court-photo::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12,31,23,.16), rgba(12,31,23,.38)); pointer-events: none; }
-.court-photo img { width: 100%; height: 100%; display: block; object-fit: cover; filter: saturate(.88) contrast(.94); }
+.court-card { width: min(520px, 92%); aspect-ratio: 4 / 3; position: relative; overflow: hidden; }
+.court-photo { position: absolute; inset: 0; overflow: hidden; background: transparent; }
+.court-photo::after { display: none; }
+.court-photo img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .court-photo-contain { background: #171a16; }
 .court-photo-contain img { object-fit: contain; }
 .court-photo-interactive { cursor: pointer; touch-action: pan-y; user-select: none; }
@@ -180,6 +180,7 @@ button { cursor: pointer; }
 .status-legend > span { display: inline-flex; align-items: center; justify-content: center; min-width: 92px; background: white; border: 1px solid var(--line); border-radius: 4px; padding: 9px 13px; color: #333a34; font-size: 10px; font-weight: 800; }
 .status-legend > span.pending { border-color: #e9b92f; background: #f4c84b; color: #58440b; }
 .status-legend > span.booked { border-color: var(--orange); background: var(--orange); color: white; }
+.status-legend > span.blocked { border-color: var(--ink); background: var(--ink); color: white; }
 .schedule-wrap { width: 100%; overflow: auto; border: 1px solid #d8deda; border-radius: 7px; background: white; }
 .schedule-table { width: 100%; min-width: 1100px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .schedule-table th { color: #46554b; font-size: 10px; letter-spacing: .08em; }

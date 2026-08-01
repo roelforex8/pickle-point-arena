@@ -60,7 +60,7 @@ const statusDetails = {
   blocked: { label: 'Blocked by venue', short: 'Blocked' },
 };
 
-const bookingLegendStatuses = ['available', 'pending', 'booked'];
+const bookingLegendStatuses = ['available', 'pending', 'booked', 'blocked'];
 
 const demoStatuses = {};
 
@@ -244,7 +244,7 @@ function App() {
       <section className="hero">
         <div className="hero-copy">
           <span className="eyebrow">BUKIDNON&apos;S NEXT PLAYGROUND</span>
-          <h1>built around<br /><em>the player</em></h1>
+          <h1>Your court,<br /><em>your moment.</em></h1>
           <p>Welcome to Pickle Point Arena!<br />Home of six (6) Indoor Pickleball Courts in Valencia City Bukidnon. Designed for every dink, drive, and drop shot. Where passion meets play&mdash;rain or shine. 🏓</p>
           <div className="hero-actions">
             <button className="primary" onClick={() => navigate('booking')}>Book a court <span>↗</span></button>
@@ -264,7 +264,6 @@ function App() {
         </div>
 
         <div className="hero-visual" aria-label="Pickleball court illustration">
-          <div className="sun-orb" />
           <div className="court-card">
             <div
               className={`court-photo court-photo-interactive${heroCourtPhotos[heroPhotoIndex].fit === 'contain' || heroCourtPhotos[heroPhotoIndex].src.includes('floor-plan') ? ' court-photo-contain' : ''}`}
@@ -292,10 +291,6 @@ function App() {
                 draggable="false"
               />
             </div>
-            <div className="court-grid"><span /><span /><span /><span /></div>
-            <div className="net" />
-            <div className="court-ball"><i /><i /><i /></div>
-            <span className="court-label">{heroCourtPhotos[heroPhotoIndex].label}</span>
           </div>
           <a className="hero-icon-link facebook-link" href="https://www.facebook.com/profile.php?id=61591695621672&sk=photos" target="_blank" rel="noreferrer" aria-label="Open Pickle Point Arena on Facebook"><span>f</span></a>
           <div className="availability-pill"><span /> {courtsOpenTonight} {courtsOpenTonight === 1 ? 'court' : 'courts'} open tonight</div>
@@ -353,7 +348,7 @@ function App() {
 function HomePreview({ onStart }) {
   return (
     <div className="feature-intro">
-      <div><span className="eyebrow dark">BUKIDNON&apos;S NEXT PLAYGROUND</span><h2>Your court.<br /><em>Your moment.</em></h2></div>
+      <div><span className="eyebrow dark">BUKIDNON&apos;S NEXT PLAYGROUND</span><h2>Easy online booking,<br /><em>and play from sunrise until late.</em><br />Choose a schedule and step onto the court.</h2></div>
       <p>Six premium courts, easy online booking, and play from sunrise until late. Choose a schedule and step onto the court.</p>
       <button className="text-link" onClick={onStart}>See the booking experience →</button>
       <div className="feature-grid">
