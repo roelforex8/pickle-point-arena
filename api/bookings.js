@@ -59,6 +59,7 @@ export default async function handler(request, response) {
       holdExpiresAt: updatedBooking.hold_expires_at,
     });
   } catch (error) {
+    console.error('Booking creation failed.', { message: error.message, createdBookingId: createdBookingId || null });
     if (admin && createdBookingId) {
       await Promise.all([
         admin.from('booking_slots').update({ status: 'expired' }).eq('booking_id', createdBookingId).eq('status', 'held'),

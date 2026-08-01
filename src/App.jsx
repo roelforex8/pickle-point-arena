@@ -354,6 +354,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
   const [proofFile, setProofFile] = useState(null);
   const [trackingNumber, setTrackingNumber] = useState('');
   const [selectionMessage, setSelectionMessage] = useState('');
+  const [checkoutMessage, setCheckoutMessage] = useState('');
   const [availability, setAvailability] = useState(new Map());
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
   const [bookingRecord, setBookingRecord] = useState(null);
@@ -523,13 +524,19 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       return;
     }
     setCheckoutStage('details');
+    setCheckoutMessage('');
     setCheckoutOpen(true);
     window.setTimeout(() => document.querySelector('.checkout-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
   };
 
   const createReservation = async () => {
-    if (!customerReady || bookingSubmitting) return;
+    if (bookingSubmitting) return;
+    if (!customerReady) {
+      setCheckoutMessage('Enter your full name and a valid email address before continuing.');
+      return;
+    }
     setBookingSubmitting(true);
+    setCheckoutMessage('');
     setSelectionMessage('');
     const slots = selectedForDate.map((key) => {
       const [, hour, courtIndex] = key.split('|');
@@ -538,8 +545,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
     const response = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customerName, customerEmail, slots }) });
     const result = await response.json();
     if (!response.ok) {
-      setSelectionMessage(result.error || 'The reservation could not be created.');
-      setCheckoutOpen(false);
+      setCheckoutMessage(result.error || 'The reservation could not be created. Please try again.');
       await refreshAvailability();
     } else {
       setTrackingNumber(result.trackingNumber);
@@ -548,6 +554,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       setBookingRecord(reservedBooking);
       setCheckoutStage('payment');
       await refreshAvailability();
+      window.setTimeout(() => document.querySelector('.checkout-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
     }
     setBookingSubmitting(false);
   };
@@ -629,10 +636,10 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
 
         {checkoutStage === 'details' && <>
           <div className="checkout-grid">
-            <div className="customer-form"><span className="step-number">01</span><h4>Customer details</h4><label>Full name<input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Customer full name" autoComplete="name" /></label><label>Email address<input type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} placeholder="customer@email.com" autoComplete="email" /></label><p>Booking updates and the tracking number will be sent to this email.</p></div>
+            <div className="customer-form"><span className="step-number">01</span><h4>Customer details</h4><label>Full name<input value={customerName} onChange={(event) => { setCustomerName(event.target.value); setCheckoutMessage(''); }} placeholder="Customer full name" autoComplete="name" required /></label><label>Email address<input type="email" value={customerEmail} onChange={(event) => { setCustomerEmail(event.target.value); setCheckoutMessage(''); }} placeholder="customer@email.com" autoComplete="email" required /></label><p>Booking updates and the tracking number will be sent to this email.</p>{checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}</div>
             <div className="order-review"><span className="step-number">BOOKING SUMMARY</span><h4>{selectedCourtCount} {selectedCourtCount === 1 ? 'court' : 'courts'} - {selectedForDate.length} {selectedForDate.length === 1 ? 'slot' : 'slots'}</h4><p>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p><div className="checkout-total"><span>Total Payment</span><strong>₱{total.toLocaleString()}</strong></div></div>
           </div>
-          <div className="checkout-footer"><p>Continuing creates a real 15-minute reservation hold for these court slots.</p><button className="primary" disabled={!customerReady || bookingSubmitting} onClick={createReservation}>{bookingSubmitting ? 'Reserving slots…' : 'Reserve and continue to payment'} <span>→</span></button></div>
+          <div className="checkout-footer"><p>Continuing creates a real 15-minute reservation hold for these court slots.</p><button className="primary" disabled={bookingSubmitting} onClick={createReservation}>{bookingSubmitting ? 'Reserving slots…' : 'Reserve and continue to payment'} <span>→</span></button></div>
         </>}
 
         {checkoutStage === 'payment' && <>
