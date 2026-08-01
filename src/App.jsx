@@ -43,8 +43,6 @@ const statusDetails = {
 
 const bookingLegendStatuses = ['available', 'pending', 'booked', 'blocked'];
 
-const demoStatuses = {};
-
 function dateKey(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -174,12 +172,6 @@ function App() {
   const [heroPhotoIndex, setHeroPhotoIndex] = useState(0);
   const [trackingHandoff, setTrackingHandoff] = useState(null);
   const heroPointerStartX = useRef(null);
-  const todayForAvailability = new Date();
-  const unavailableTonight = new Set(['booked', 'pending', 'awaiting', 'blocked']);
-  const courtsOpenTonight = courtNames.filter((_, courtIndex) => {
-    const status = blockedSlots.has(slotKey(todayForAvailability, 18, courtIndex)) ? 'blocked' : (demoStatuses[`18-${courtIndex}`] || 'available');
-    return !unavailableTonight.has(status);
-  }).length;
 
   useEffect(() => {
     const timer = window.setInterval(() => setHeroPhotoIndex((current) => (current + 1) % heroCourtPhotos.length), 5000);
@@ -226,7 +218,7 @@ function App() {
         <div className="hero-copy">
           <span className="eyebrow">BUKIDNON&apos;S NEXT PLAYGROUND</span>
           <h1>Your court,<br /><em>your moment.</em></h1>
-          <p>Welcome to Pickle Point Arena!<br />Home of six (6) Indoor Pickleball Courts in Valencia City Bukidnon. Designed for every dink, drive, and drop shot. Where passion meets play&mdash;rain or shine. 🏓</p>
+          <p>Pickle Point Arena!<br />Home of six (6) Indoor Pickleball Courts in Valencia City Bukidnon. Designed for every drink, drive, and drop shot. Where passion meets play-rain or shine.</p>
           <div className="hero-actions">
             <button className="primary" onClick={() => navigate('booking')}>Book a court <span>↗</span></button>
             <button
@@ -244,7 +236,7 @@ function App() {
           </div>
         </div>
 
-        <div className="hero-visual" aria-label="Pickleball court illustration">
+        <div className="hero-visual" aria-label="Pickle Point Arena photo gallery">
           <div className="court-card">
             <div
               className={`court-photo court-photo-interactive${heroCourtPhotos[heroPhotoIndex].fit === 'contain' || heroCourtPhotos[heroPhotoIndex].src.includes('floor-plan') ? ' court-photo-contain' : ''}`}
@@ -273,10 +265,6 @@ function App() {
               />
             </div>
           </div>
-          <a className="hero-icon-link facebook-link" href="https://www.facebook.com/profile.php?id=61591695621672&sk=photos" target="_blank" rel="noreferrer" aria-label="Open Pickle Point Arena on Facebook"><span>f</span></a>
-          <div className="availability-pill"><span /> {courtsOpenTonight} {courtsOpenTonight === 1 ? 'court' : 'courts'} open tonight</div>
-          <a className="hero-icon-link location-link" href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer" aria-label="Open Pickle Point Arena location in Google Maps"><span className="location-pin-icon"><i /></span></a>
-          <div className="rate-pill"><small>EVENING RATE</small><strong>₱350/hr</strong></div>
         </div>
       </section>
 
