@@ -372,6 +372,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [recentSubmissions, setRecentSubmissions] = useState([]);
   const bookingRecordRef = useRef(null);
+  const reservationSubmittingRef = useRef(false);
   const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => {
     const day = new Date(weekStart);
@@ -408,7 +409,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       });
     });
     setAvailability(nextAvailability);
-    if (!bookingRecordRef.current) {
+    if (!bookingRecordRef.current && !reservationSubmittingRef.current) {
       setSelectedSlots((current) => new Set([...current].filter((key) => {
         if (!key.startsWith(`${selectedDate}|`)) return true;
         const [, hour, courtIndex] = key.split('|');
@@ -562,26 +563,34 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       return;
     }
     setBookingSubmitting(true);
+    reservationSubmittingRef.current = true;
     setCheckoutMessage('');
     setSelectionMessage('');
     const slots = selectedForDate.map((key) => {
       const [, hour, courtIndex] = key.split('|');
       return { courtId: Number(courtIndex) + 1, slotStart: manilaSlotIso(selectedDate, Number(hour)) };
     });
-    const response = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customerName, customerEmail, customerMobile, slots }) });
-    const result = await response.json();
-    if (!response.ok) {
-      setCheckoutMessage(result.error || 'The reservation could not be created. Please try again.');
-      await refreshAvailability();
-    } else {
-      setTrackingNumber(result.trackingNumber);
-      const reservedBooking = { ...result, status: 'awaiting_payment' };
-      bookingRecordRef.current = reservedBooking;
-      setBookingRecord(reservedBooking);
-      setCheckoutStage('payment');
-      await refreshAvailability();
+    try {
+      const response = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customerName, customerEmail, customerMobile, slots }) });
+      const result = await response.json();
+      if (!response.ok) {
+        reservationSubmittingRef.current = false;
+        setCheckoutMessage(result.error || 'The reservation could not be created. Please try again.');
+        await refreshAvailability();
+      } else {
+        setTrackingNumber(result.trackingNumber);
+        const reservedBooking = { ...result, status: 'awaiting_payment' };
+        bookingRecordRef.current = reservedBooking;
+        setBookingRecord(reservedBooking);
+        setCheckoutStage('payment');
+        await refreshAvailability();
+      }
+    } catch (error) {
+      setCheckoutMessage(error.message || 'The reservation could not be created. Please try again.');
+    } finally {
+      reservationSubmittingRef.current = false;
+      setBookingSubmitting(false);
     }
-    setBookingSubmitting(false);
   };
 
   const submitPaymentProof = async () => {
