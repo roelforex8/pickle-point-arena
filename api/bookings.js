@@ -24,6 +24,10 @@ export default async function handler(request, response) {
     const body = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : (request.body || {});
     const customerName = String(body.customerName || '').trim();
     const customerEmail = String(body.customerEmail || '').trim().toLowerCase();
+    const customerMobile = String(body.customerMobile || '').trim();
+    if (customerName.length < 2 || !/^\S+@\S+\.\S+$/.test(customerEmail) || customerMobile.length > 24 || customerMobile.replace(/\D/g, '').length < 10) {
+      return sendJson(response, 400, { error: 'Enter a valid full name, email address, and mobile number.' });
+    }
     const slots = Array.isArray(body.slots) ? body.slots.map((slot) => ({ court_id: Number(slot.courtId), slot_start: String(slot.slotStart) })) : [];
     const { data, error } = await admin.rpc('create_public_booking', { p_customer_name: customerName, p_customer_email: customerEmail, p_slots: slots });
     if (error) return sendJson(response, 400, { error: error.message });
@@ -43,12 +47,20 @@ export default async function handler(request, response) {
     const subtotal = pricedSlots.reduce((sum, slot) => sum + slot.hourlyRate, 0);
     const bookingFee = pricedSlots.length * 10;
     const holdExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    const { data: updatedBooking, error: holdError } = await admin
+    let { data: updatedBooking, error: holdError } = await admin
       .from('bookings')
-      .update({ hold_expires_at: holdExpiresAt, subtotal, booking_fee: bookingFee })
+      .update({ hold_expires_at: holdExpiresAt, subtotal, booking_fee: bookingFee, customer_mobile: customerMobile })
       .eq('id', booking.booking_id)
       .select('hold_expires_at, subtotal, booking_fee, total_amount')
       .single();
+    if (holdError && /customer_mobile/i.test(holdError.message || '')) {
+      ({ data: updatedBooking, error: holdError } = await admin
+        .from('bookings')
+        .update({ hold_expires_at: holdExpiresAt, subtotal, booking_fee: bookingFee })
+        .eq('id', booking.booking_id)
+        .select('hold_expires_at, subtotal, booking_fee, total_amount')
+        .single());
+    }
     if (holdError) throw holdError;
     return sendJson(response, 201, {
       bookingId: booking.booking_id,

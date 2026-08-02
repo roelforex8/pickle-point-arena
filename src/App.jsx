@@ -43,6 +43,16 @@ const statusDetails = {
 
 const bookingLegendStatuses = ['available', 'pending', 'booked', 'blocked'];
 
+function CartIcon({ className = '' }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 4h2l2.1 10.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L20 8H6" />
+      <circle cx="10" cy="19" r="1.25" />
+      <circle cx="17" cy="19" r="1.25" />
+    </svg>
+  );
+}
+
 function dateKey(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -350,6 +360,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
   const [checkoutStage, setCheckoutStage] = useState('details');
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [customerMobile, setCustomerMobile] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
   const [proofFile, setProofFile] = useState(null);
   const [trackingNumber, setTrackingNumber] = useState('');
@@ -502,10 +513,9 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
     const hour = Number(key.split('|')[1]);
     return sum + (hour >= 6 && hour < 16 ? 300 : 350);
   }, 0);
-  const selectedCourtCount = new Set(selectedForDate.map((key) => key.split('|')[2])).size;
   const bookingFee = selectedForDate.length * 10;
   const total = rental + bookingFee;
-  const customerReady = customerName.trim().length > 1 && /^\S+@\S+\.\S+$/.test(customerEmail);
+  const customerReady = customerName.trim().length > 1 && /^\S+@\S+\.\S+$/.test(customerEmail) && customerMobile.replace(/\D/g, '').length >= 10;
   const paymentReady = paymentReference.trim().length > 2 && proofFile;
 
   const startCheckout = async () => {
@@ -529,10 +539,20 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
     window.setTimeout(() => document.querySelector('.checkout-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
   };
 
+  const clearSelection = () => {
+    if (bookingRecordRef.current || bookingRecord || trackingNumber) {
+      setSelectionMessage('This reservation is already in progress and cannot be cleared.');
+      return;
+    }
+    setSelectedSlots(new Set());
+    setCheckoutOpen(false);
+    setSelectionMessage('');
+  };
+
   const createReservation = async () => {
     if (bookingSubmitting) return;
     if (!customerReady) {
-      setCheckoutMessage('Enter your full name and a valid email address before continuing.');
+      setCheckoutMessage('Enter your full name, a valid email address, and mobile number before continuing.');
       return;
     }
     setBookingSubmitting(true);
@@ -542,7 +562,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       const [, hour, courtIndex] = key.split('|');
       return { courtId: Number(courtIndex) + 1, slotStart: manilaSlotIso(selectedDate, Number(hour)) };
     });
-    const response = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customerName, customerEmail, slots }) });
+    const response = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customerName, customerEmail, customerMobile, slots }) });
     const result = await response.json();
     if (!response.ok) {
       setCheckoutMessage(result.error || 'The reservation could not be created. Please try again.');
@@ -575,6 +595,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       setPaymentReference('');
       setProofFile(null);
       setCustomerName('');
+      setCustomerMobile('');
       setCheckoutStage('details');
       setCheckoutOpen(false);
       await refreshAvailability();
@@ -625,22 +646,40 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       </div>
 
       <div className="booking-dock">
-        <div><small>YOUR SELECTION</small><strong>{selectedCourtCount} {selectedCourtCount === 1 ? 'court' : 'courts'} - {selectedForDate.length} {selectedForDate.length === 1 ? 'slot' : 'slots'}</strong><span className={selectedForDate.length ? 'selection-total' : ''}>{selectedForDate.length ? `Total amount: ₱${total.toLocaleString()}` : 'Tap any white slot to begin.'}</span></div>
-        <button className="primary" onClick={startCheckout}>Book Now <span>→</span></button>
+        <div className="selection-review">
+          <span className="selection-cart"><CartIcon /><b>{selectedForDate.length}</b></span>
+          <span><strong>{selectedForDate.length} {selectedForDate.length === 1 ? 'slot' : 'slots'} selected</strong><small>{selectedForDate.length ? 'Review your selection to proceed' : 'Tap any white slot to begin'}</small></span>
+        </div>
+        <div className="booking-dock-actions">
+          <button className="clear-selection" type="button" disabled={!selectedForDate.length} onClick={clearSelection}>Clear</button>
+          <button className="primary" type="button" disabled={!selectedForDate.length} onClick={startCheckout}><CartIcon />Proceed to Booking</button>
+        </div>
       </div>
       {selectionMessage && <p className="selection-message" role="alert">{selectionMessage}</p>}
       <p className="booking-policy">Selected slots are held for 15 minutes after reservation. Full payment is required. All confirmed bookings are non-refundable and cannot be cancelled.</p>
 
-      {checkoutOpen && selectedForDate.length > 0 && <section className="checkout-panel">
-        <div className="checkout-heading"><div><span className="eyebrow dark">LIVE BOOKING</span><h3>{checkoutStage === 'details' ? 'Book Now' : checkoutStage === 'payment' ? 'Pay and submit proof.' : 'Payment submitted.'}</h3><p>Your reservation, payment reference, and receipt are securely stored for Owner/Admin review.</p></div><button onClick={() => setCheckoutOpen(false)} aria-label="Close checkout">×</button></div>
+      {checkoutOpen && selectedForDate.length > 0 && <>
+        {checkoutStage === 'details' && <div className="reservation-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCheckoutOpen(false); }}>
+          <section className="reservation-modal" role="dialog" aria-modal="true" aria-labelledby="reservation-title">
+            <header><h3 id="reservation-title">Confirm Reservation</h3><button type="button" onClick={() => setCheckoutOpen(false)} aria-label="Close confirmation">×</button></header>
+            <div className="reservation-summary">
+              <div className="reservation-date"><small>{activeDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</small><strong>{activeDate.getDate()}</strong></div>
+              <div className="reservation-summary-copy"><strong>Booking Summary</strong><span>{activeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span></div>
+              <div className="reservation-slots">{selectedSchedule.map((slot) => <div key={slot.key}><span><strong>{courtNames[slot.courtIndex]}</strong><small>{timeRange(slot.hour)}</small></span><b>₱{(slot.hour >= 6 && slot.hour < 16 ? 300 : 350).toLocaleString()}</b></div>)}</div>
+            </div>
+            <div className="reservation-form">
+              <label><span><b>*</b> Full Name</span><input value={customerName} onChange={(event) => { setCustomerName(event.target.value); setCheckoutMessage(''); }} placeholder="John Doe" autoComplete="name" required /></label>
+              <label><span><b>*</b> Email Address</span><input type="email" value={customerEmail} onChange={(event) => { setCustomerEmail(event.target.value); setCheckoutMessage(''); }} placeholder="john@example.com" autoComplete="email" required /></label>
+              <label><span><b>*</b> Mobile Number</span><input type="tel" value={customerMobile} maxLength={24} onChange={(event) => { setCustomerMobile(event.target.value); setCheckoutMessage(''); }} placeholder="+63 912 345 6789" autoComplete="tel" required /></label>
+              {checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}
+            </div>
+            <div className="reservation-total"><span>Selected Slots:<b>{selectedForDate.length}</b></span><strong>Total Amount:<b>₱{total.toLocaleString()}</b></strong></div>
+            <button className="confirm-pay" type="button" disabled={bookingSubmitting} onClick={createReservation}>{bookingSubmitting ? 'Reserving slots…' : 'Confirm & Pay'}</button>
+          </section>
+        </div>}
 
-        {checkoutStage === 'details' && <>
-          <div className="checkout-grid">
-            <div className="customer-form"><span className="step-number">01</span><h4>Customer details</h4><label>Full name<input value={customerName} onChange={(event) => { setCustomerName(event.target.value); setCheckoutMessage(''); }} placeholder="Customer full name" autoComplete="name" required /></label><label>Email address<input type="email" value={customerEmail} onChange={(event) => { setCustomerEmail(event.target.value); setCheckoutMessage(''); }} placeholder="customer@email.com" autoComplete="email" required /></label><p>Booking updates and the tracking number will be sent to this email.</p>{checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}</div>
-            <div className="order-review"><span className="step-number">BOOKING SUMMARY</span><h4>{selectedCourtCount} {selectedCourtCount === 1 ? 'court' : 'courts'} - {selectedForDate.length} {selectedForDate.length === 1 ? 'slot' : 'slots'}</h4><p>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p><div className="checkout-total"><span>Total Payment</span><strong>₱{total.toLocaleString()}</strong></div></div>
-          </div>
-          <div className="checkout-footer"><p>Continuing creates a real 15-minute reservation hold for these court slots.</p><button className="primary" disabled={bookingSubmitting} onClick={createReservation}>{bookingSubmitting ? 'Reserving slots…' : 'Reserve and continue to payment'} <span>→</span></button></div>
-        </>}
+        {checkoutStage !== 'details' && <section className="checkout-panel">
+          <div className="checkout-heading"><div><span className="eyebrow dark">LIVE BOOKING</span><h3>{checkoutStage === 'payment' ? 'Pay and submit proof.' : 'Payment submitted.'}</h3><p>Your reservation, payment reference, and receipt are securely stored for Owner/Admin review.</p></div><button onClick={() => setCheckoutOpen(false)} aria-label="Close checkout">×</button></div>
 
         {checkoutStage === 'payment' && <>
           <div className="payment-confirmation-banner" role="status">
@@ -660,7 +699,8 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
         </>}
 
         {checkoutStage === 'submitted' && <div className="status-result pending-result"><span className="result-icon">✓</span><span className="step-number">PAYMENT SUBMITTED — PENDING VERIFICATION</span><h4>Your payment proof is with the venue.</h4><p>The Owner or Admin can now open the receipt and confirm or reject this booking from the private portal. Use Track Booking to check for updates.</p><div className="tracking-number"><small>TRACKING NUMBER</small><strong>{trackingNumber}</strong><button onClick={() => navigator.clipboard?.writeText(trackingNumber)}>Copy</button></div><div className="confirmed-details"><span>Amount submitted<strong>₱{(bookingRecord?.totalAmount || total).toLocaleString()}</strong></span><span>Payment method<strong>GCash</strong></span><span>Status<strong>Pending verification</strong></span></div></div>}
-      </section>}
+        </section>}
+      </>}
     </div>
   );
 }
