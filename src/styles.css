@@ -226,6 +226,8 @@ button { cursor: pointer; }
 
 .checkout-panel { margin-top: 32px; border: 1px solid var(--line); background: white; border-radius: 7px; overflow: hidden; box-shadow: 0 18px 50px rgba(20,30,23,.09); }
 .reservation-modal-backdrop { position: fixed; inset: 0; z-index: 1200; padding: 20px; display: grid; place-items: center; overflow-y: auto; background: rgba(17,20,16,.68); backdrop-filter: blur(3px); }
+.payment-modal-backdrop { position: fixed; inset: 0; z-index: 1200; padding: 20px; display: grid; place-items: center; overflow-y: auto; background: rgba(17,20,16,.68); backdrop-filter: blur(3px); }
+.payment-checkout-panel { width: min(1040px, 100%); max-height: calc(100vh - 40px); margin: 0; overflow-y: auto; }
 .reservation-modal { width: min(560px, 100%); max-height: calc(100vh - 40px); padding: 24px; overflow-y: auto; border: 1px solid rgba(55,87,70,.2); border-radius: 10px; background: white; color: #172033; box-shadow: 0 28px 80px rgba(0,0,0,.32); }
 .reservation-modal > header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .reservation-modal > header h3 { margin: 0; font-size: 16px; }
@@ -1125,8 +1127,9 @@ footer > div a:hover, footer > div a:focus-visible { color: white; text-decorati
   .booking-dock-actions { width: 100%; }
   .booking-dock-actions .clear-selection { flex: 0 0 auto; }
   .booking-dock-actions .primary { min-width: 0; flex: 1; }
-  .reservation-modal-backdrop { padding: 8px; place-items: start center; }
+  .reservation-modal-backdrop, .payment-modal-backdrop { padding: 8px; place-items: start center; }
   .reservation-modal { max-height: calc(100vh - 16px); padding: 18px 14px; }
+  .payment-checkout-panel { max-height: calc(100vh - 16px); }
   .reservation-summary { padding: 13px; }
   .court-gallery { grid-template-columns: 1fr; grid-template-rows: none; }
   .venue-photo-wide { grid-row: auto; }

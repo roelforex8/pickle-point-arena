@@ -519,6 +519,11 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
   const paymentReady = paymentReference.trim().length > 2 && proofFile;
 
   const startCheckout = async () => {
+    if ((bookingRecordRef.current || bookingRecord || trackingNumber) && checkoutStage === 'payment') {
+      setCheckoutOpen(true);
+      setSelectionMessage('');
+      return;
+    }
     if (!selectedForDate.length) {
       setSelectionMessage('Select at least one white court slot above before continuing.');
       return;
@@ -549,7 +554,8 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
     setSelectionMessage('');
   };
 
-  const createReservation = async () => {
+  const createReservation = async (event) => {
+    event?.preventDefault();
     if (bookingSubmitting) return;
     if (!customerReady) {
       setCheckoutMessage('Enter your full name, a valid email address, and mobile number before continuing.');
@@ -574,7 +580,6 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       setBookingRecord(reservedBooking);
       setCheckoutStage('payment');
       await refreshAvailability();
-      window.setTimeout(() => document.querySelector('.checkout-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
     }
     setBookingSubmitting(false);
   };
@@ -660,7 +665,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
 
       {checkoutOpen && selectedForDate.length > 0 && <>
         {checkoutStage === 'details' && <div className="reservation-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCheckoutOpen(false); }}>
-          <section className="reservation-modal" role="dialog" aria-modal="true" aria-labelledby="reservation-title">
+          <form className="reservation-modal" role="dialog" aria-modal="true" aria-labelledby="reservation-title" onSubmit={createReservation}>
             <header><h3 id="reservation-title">Confirm Reservation</h3><button type="button" onClick={() => setCheckoutOpen(false)} aria-label="Close confirmation">×</button></header>
             <div className="reservation-summary">
               <div className="reservation-date"><small>{activeDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</small><strong>{activeDate.getDate()}</strong></div>
@@ -670,15 +675,16 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
             <div className="reservation-form">
               <label><span><b>*</b> Full Name</span><input value={customerName} onChange={(event) => { setCustomerName(event.target.value); setCheckoutMessage(''); }} placeholder="John Doe" autoComplete="name" required /></label>
               <label><span><b>*</b> Email Address</span><input type="email" value={customerEmail} onChange={(event) => { setCustomerEmail(event.target.value); setCheckoutMessage(''); }} placeholder="john@example.com" autoComplete="email" required /></label>
-              <label><span><b>*</b> Mobile Number</span><input type="tel" value={customerMobile} maxLength={24} onChange={(event) => { setCustomerMobile(event.target.value); setCheckoutMessage(''); }} placeholder="+63 912 345 6789" autoComplete="tel" required /></label>
+              <label><span><b>*</b> Mobile Number</span><input type="tel" inputMode="tel" pattern="[+0-9() -]{10,24}" value={customerMobile} maxLength={24} onChange={(event) => { setCustomerMobile(event.target.value); setCheckoutMessage(''); }} placeholder="+63 912 345 6789" autoComplete="tel" required /></label>
               {checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}
             </div>
             <div className="reservation-total"><span>Selected Slots:<b>{selectedForDate.length}</b></span><strong>Total Amount:<b>₱{total.toLocaleString()}</b></strong></div>
-            <button className="confirm-pay" type="button" disabled={bookingSubmitting} onClick={createReservation}>{bookingSubmitting ? 'Reserving slots…' : 'Confirm & Pay'}</button>
-          </section>
+            <button className="confirm-pay" type="submit" disabled={bookingSubmitting}>{bookingSubmitting ? 'Reserving slots…' : 'Confirm & Pay'}</button>
+          </form>
         </div>}
 
-        {checkoutStage !== 'details' && <section className="checkout-panel">
+        {checkoutStage !== 'details' && <div className="payment-modal-backdrop">
+        <section className="checkout-panel payment-checkout-panel" role="dialog" aria-modal="true" aria-label="Complete payment">
           <div className="checkout-heading"><div><span className="eyebrow dark">LIVE BOOKING</span><h3>{checkoutStage === 'payment' ? 'Pay and submit proof.' : 'Payment submitted.'}</h3><p>Your reservation, payment reference, and receipt are securely stored for Owner/Admin review.</p></div><button onClick={() => setCheckoutOpen(false)} aria-label="Close checkout">×</button></div>
 
         {checkoutStage === 'payment' && <>
@@ -699,7 +705,8 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
         </>}
 
         {checkoutStage === 'submitted' && <div className="status-result pending-result"><span className="result-icon">✓</span><span className="step-number">PAYMENT SUBMITTED — PENDING VERIFICATION</span><h4>Your payment proof is with the venue.</h4><p>The Owner or Admin can now open the receipt and confirm or reject this booking from the private portal. Use Track Booking to check for updates.</p><div className="tracking-number"><small>TRACKING NUMBER</small><strong>{trackingNumber}</strong><button onClick={() => navigator.clipboard?.writeText(trackingNumber)}>Copy</button></div><div className="confirmed-details"><span>Amount submitted<strong>₱{(bookingRecord?.totalAmount || total).toLocaleString()}</strong></span><span>Payment method<strong>GCash</strong></span><span>Status<strong>Pending verification</strong></span></div></div>}
-        </section>}
+        </section>
+        </div>}
       </>}
     </div>
   );
