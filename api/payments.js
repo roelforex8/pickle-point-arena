@@ -30,7 +30,7 @@ export default async function handler(request, response) {
 
     const referenceNumber = String(body.referenceNumber || '').trim();
     const receiptPath = String(body.receiptPath || '');
-    if (referenceNumber.length < 3 || !receiptPath.startsWith(`${booking.id}/`)) return sendJson(response, 400, { error: 'Enter the payment reference number and upload the receipt.' });
+    if (!receiptPath.startsWith(`${booking.id}/`)) return sendJson(response, 400, { error: 'Upload the payment receipt.' });
 
     const paymentRecord = {
       booking_id: booking.id,

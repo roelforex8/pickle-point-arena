@@ -517,7 +517,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
   const bookingFee = selectedForDate.length * 10;
   const total = rental + bookingFee;
   const customerReady = customerName.trim().length > 1 && /^\S+@\S+\.\S+$/.test(customerEmail) && customerMobile.replace(/\D/g, '').length >= 10;
-  const paymentReady = paymentReference.trim().length > 2 && proofFile;
+  const paymentReady = Boolean(proofFile);
 
   const startCheckout = async () => {
     if ((bookingRecordRef.current || bookingRecord || trackingNumber) && checkoutStage === 'payment') {
@@ -708,7 +708,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
           </div>
           <div className="payment-stage">
             <div className="payment-choice"><span className="step-number">02</span><h4>Payment method</h4><div className="payment-tabs"><button className="active"><strong>GCash</strong><small>Available now</small></button><button disabled><strong>Maya</strong><small>Coming soon</small></button><button disabled><strong>Metrobank</strong><small>Coming soon</small></button></div><div className="qr-payment"><div className="qr-frame"><img src="/gcash-qr-hd.png" alt="High-resolution GCash QR code for Pickle Point Arena payment" /></div><div><span className="gcash-label">GCASH PAYMENT</span><h4>Scan and pay ₱{total.toLocaleString()}</h4><p>Enter the exact amount shown. Transfer fees may apply.</p><a href="/gcash-qr-hd.png" download="Pickle-Point-Arena-GCash-QR.png">↓ Download GCash QR</a></div></div></div>
-            <div className="proof-form"><span className="step-number">03</span><h4>Submit payment proof</h4><label>Reference number<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="Enter GCash reference number" /></label><label className="file-upload">Receipt or screenshot<input type="file" accept="image/png,image/jpeg,application/pdf" onChange={(event) => setProofFile(event.target.files?.[0] || null)} /><span>{proofFile?.name || 'Choose an image or PDF'}</span></label><p>The receipt is stored privately and can only be opened by an authorized Owner or Admin.</p><div className="payment-summary"><span>Customer</span><strong>{customerName}</strong><span>Tracking</span><strong>{trackingNumber}</strong><span>Amount</span><strong>₱{(bookingRecord?.totalAmount || total).toLocaleString()}</strong></div></div>
+            <div className="proof-form"><span className="step-number">03</span><h4>Submit payment proof</h4><label>Reference number<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="(optional)" /></label><label className="file-upload">Receipt or screenshot<input type="file" accept="image/png,image/jpeg,application/pdf" onChange={(event) => setProofFile(event.target.files?.[0] || null)} /><span>{proofFile?.name || 'Choose an image or PDF'}</span></label><p>The receipt is stored privately and can only be opened by an authorized Owner or Admin.</p><div className="payment-summary"><span>Customer</span><strong>{customerName}</strong><span>Tracking</span><strong>{trackingNumber}</strong><span>Amount</span><strong>₱{(bookingRecord?.totalAmount || total).toLocaleString()}</strong></div></div>
           </div>
           <div className="checkout-footer"><span className="hold-notice">Reserved until {bookingRecord?.holdExpiresAt ? new Date(bookingRecord.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }) : '—'}</span><button className="primary" disabled={!paymentReady || bookingSubmitting} onClick={submitPaymentProof}>{bookingSubmitting ? 'Uploading securely…' : 'Submit payment proof'} <span>→</span></button></div>
         </>}
@@ -860,7 +860,7 @@ function TrackingPreview({ initialBooking = null }) {
   };
 
   const continuePayment = async () => {
-    if (!receiptFile || referenceNumber.trim().length < 3) return;
+    if (!receiptFile) return;
     setProofSubmitting(true);
     setLookupMessage('');
     try {
@@ -915,9 +915,9 @@ function TrackingPreview({ initialBooking = null }) {
           {booking.status === 'awaiting_payment' && <div className="continue-payment">
             <p>Upload payment before {new Date(booking.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })} to keep the reservation.</p>
             <img src="/gcash-qr-hd.png" alt="GCash QR code" />
-            <label>GCash reference number<input value={referenceNumber} onChange={(event) => setReferenceNumber(event.target.value)} placeholder="Reference number" /></label>
+            <label>GCash reference number<input value={referenceNumber} onChange={(event) => setReferenceNumber(event.target.value)} placeholder="(optional)" /></label>
             <label className="file-upload">Receipt or screenshot<input type="file" accept="image/png,image/jpeg,application/pdf" onChange={(event) => setReceiptFile(event.target.files?.[0] || null)} /><span>{receiptFile?.name || 'Choose an image or PDF'}</span></label>
-            <button type="button" className="primary full" disabled={proofSubmitting || !receiptFile || referenceNumber.trim().length < 3} onClick={continuePayment}>{proofSubmitting ? 'Uploading…' : 'Submit payment proof'}</button>
+            <button type="button" className="primary full" disabled={proofSubmitting || !receiptFile} onClick={continuePayment}>{proofSubmitting ? 'Uploading…' : 'Submit payment proof'}</button>
           </div>}
         </div>}
       </form>
