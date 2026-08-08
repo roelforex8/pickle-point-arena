@@ -315,9 +315,11 @@ button { cursor: pointer; }
 .proof-form label { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; color: #687068; font-size: 9px; font-weight: 800; }
 .proof-form input { min-height: 46px; padding: 0 11px; border: 1px solid #d9ded9; border-radius: 3px; background: white; outline: 0; }
 .proof-form input:focus { border-color: var(--orange); }
-.file-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.file-upload { position: relative; }
+.file-upload input { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .file-upload > span { min-height: 76px; padding: 12px; display: grid; place-items: center; border: 1px dashed #bfc7bf; border-radius: 4px; background: white; color: var(--forest); text-align: center; cursor: pointer; }
 .proof-form > p { color: #898f89; font-size: 9px; line-height: 1.5; }
+.proof-form > .checkout-message { margin: 0 0 14px; padding: 11px 12px; border: 1px solid #e0a28d; border-radius: 4px; background: #fff0ea; color: #8f3217; font-size: 10px; font-weight: 800; }
 .payment-summary { margin-top: 18px; padding-top: 16px; display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; border-top: 1px solid var(--line); }
 .payment-summary span { color: #858c85; font-size: 9px; }
 .payment-summary strong { text-align: right; font-size: 10px; overflow-wrap: anywhere; }
@@ -788,7 +790,7 @@ button { cursor: pointer; }
 .continue-payment > img { width: 150px; max-height: 150px; margin: 8px auto; display: block; object-fit: cover; object-position: top; border: 8px solid white; }
 .continue-payment label { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; color: #abb3ad; font-size: 9px; }
 .continue-payment .file-upload { min-height: 74px; padding: 10px; display: grid; place-items: center; border: 1px dashed #4b554e; border-radius: 3px; }
-.continue-payment .file-upload input { position: absolute; opacity: 0; pointer-events: none; }
+.continue-payment .file-upload input { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .continue-payment .file-upload span { color: #d4dbd5; }
 .hold-notice { color: #7b827b; font-size: 10px; font-weight: 800; }
 

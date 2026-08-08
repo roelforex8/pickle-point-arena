@@ -2,7 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { getAdminClient, sendJson } from './_supabase.js';
 import { findPublicBooking, notifyStaff, publicBookingPayload } from './_booking.js';
 
-const allowedTypes = new Set(['image/jpeg', 'image/png', 'application/pdf']);
+const maxReceiptBytes = 20 * 1024 * 1024;
+const allowedTypes = new Map([
+  ['image/jpeg', 'jpg'],
+  ['image/png', 'png'],
+  ['image/webp', 'webp'],
+  ['image/heic', 'heic'],
+  ['image/heif', 'heif'],
+  ['application/pdf', 'pdf'],
+]);
 
 export default async function handler(request, response) {
   if (!['POST', 'PUT'].includes(request.method)) {
@@ -20,11 +28,14 @@ export default async function handler(request, response) {
 
     if (request.method === 'POST') {
       const mimeType = String(body.mimeType || '').toLowerCase();
-      if (!allowedTypes.has(mimeType)) return sendJson(response, 400, { error: 'Upload a JPG, PNG, or PDF receipt.' });
-      const extension = mimeType === 'application/pdf' ? 'pdf' : mimeType === 'image/png' ? 'png' : 'jpg';
+      const fileSize = Number(body.fileSize || 0);
+      if (!allowedTypes.has(mimeType)) return sendJson(response, 400, { error: 'Upload a JPG, PNG, WebP, HEIC, HEIF, or PDF receipt.' });
+      if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize > maxReceiptBytes) return sendJson(response, 400, { error: 'The receipt must be a non-empty file no larger than 20 MB.' });
+      const extension = allowedTypes.get(mimeType);
       const path = `${booking.id}/${randomUUID()}.${extension}`;
       const { data, error } = await admin.storage.from('payment-receipts').createSignedUploadUrl(path);
       if (error) throw error;
+      console.log('[api/payments] signed upload prepared', { bookingId: booking.id, mimeType, fileSize });
       return sendJson(response, 200, { path, token: data.token });
     }
 
@@ -58,8 +69,10 @@ export default async function handler(request, response) {
     });
     booking.status = 'payment_submitted';
     booking.payments = [{ method: 'gcash', status: 'pending_verification', submitted_at: paymentRecord.submitted_at }];
+    console.log('[api/payments] payment proof finalized', { bookingId: booking.id, receiptPath });
     return sendJson(response, 200, { booking: publicBookingPayload(booking) });
   } catch (error) {
+    console.error('[api/payments] failed', { method: request.method, message: error.message });
     return sendJson(response, 500, { error: error.message || 'The payment proof could not be submitted.' });
   }
 }
