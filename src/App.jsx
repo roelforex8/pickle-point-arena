@@ -185,6 +185,7 @@ const receiptMimeByExtension = {
   heif: 'image/heif',
   pdf: 'application/pdf',
 };
+const storageReceiptMimeTypes = new Set(['image/jpeg', 'image/png', 'application/pdf']);
 
 function validateReceiptFile(file) {
   if (!file) throw new Error('Choose a receipt image or PDF first.');
@@ -197,17 +198,51 @@ function validateReceiptFile(file) {
   return mimeType;
 }
 
-async function uploadPaymentProof({ lookupMethod, lookupValue, referenceNumber, file }) {
+async function convertReceiptImageToJpeg(file) {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.decoding = 'async';
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = () => reject(new Error('This phone image could not be converted. Take a screenshot of the receipt and upload that screenshot instead.'));
+      image.src = objectUrl;
+    });
+    const longestEdge = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale = Math.min(1, 3000 / Math.max(1, longestEdge));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Receipt image conversion is unavailable in this browser. Upload a screenshot instead.');
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+    if (!blob) throw new Error('Receipt image conversion failed. Upload a screenshot instead.');
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg', lastModified: Date.now() });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function prepareReceiptUpload(file) {
   const mimeType = validateReceiptFile(file);
+  if (storageReceiptMimeTypes.has(mimeType)) return { file, mimeType };
+  const convertedFile = await convertReceiptImageToJpeg(file);
+  validateReceiptFile(convertedFile);
+  return { file: convertedFile, mimeType: 'image/jpeg' };
+}
+
+async function uploadPaymentProof({ lookupMethod, lookupValue, referenceNumber, file }) {
+  const preparedUpload = await prepareReceiptUpload(file);
   const prepareResponse = await fetch('/api/payments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lookupMethod, lookupValue, mimeType, fileSize: file.size }),
+    body: JSON.stringify({ lookupMethod, lookupValue, mimeType: preparedUpload.mimeType, fileSize: preparedUpload.file.size }),
   });
   const prepared = await prepareResponse.json();
   if (!prepareResponse.ok) throw new Error(prepared.error || 'The receipt upload could not be prepared.');
 
-  const { error: uploadError } = await supabase.storage.from('payment-receipts').uploadToSignedUrl(prepared.path, prepared.token, file, { contentType: mimeType });
+  const { error: uploadError } = await supabase.storage.from('payment-receipts').uploadToSignedUrl(prepared.path, prepared.token, preparedUpload.file, { contentType: preparedUpload.mimeType });
   if (uploadError) throw new Error(`Receipt upload failed: ${uploadError.message}`);
 
   const finalizeResponse = await fetch('/api/payments', {
@@ -756,7 +791,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
           </div>
           <div className="payment-stage">
             <div className="payment-choice"><span className="step-number">02</span><h4>Payment method</h4><div className="payment-tabs"><button className="active"><strong>GCash</strong><small>Available now</small></button><button disabled><strong>Maya</strong><small>Coming soon</small></button><button disabled><strong>Metrobank</strong><small>Coming soon</small></button></div><div className="qr-payment"><div className="qr-frame"><img src="/gcash-qr-hd.png" alt="High-resolution GCash QR code for Pickle Point Arena payment" /></div><div><span className="gcash-label">GCASH PAYMENT</span><h4>Scan and pay ₱{total.toLocaleString()}</h4><p>Enter the exact amount shown. Transfer fees may apply.</p><a href="/gcash-qr-hd.png" download="Pickle-Point-Arena-GCash-QR.png">↓ Download GCash QR</a></div></div></div>
-            <div className="proof-form"><span className="step-number">03</span><h4>Submit payment proof</h4><label>Reference number<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="(optional)" /></label><label className="file-upload">Receipt or screenshot<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf" onChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setProofFile(file); setCheckoutMessage(''); } catch (error) { setProofFile(null); setCheckoutMessage(error.message); event.target.value = ''; } }} /><span>{proofFile?.name || 'Choose an image or PDF (20 MB max)'}</span></label>{checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}<p>The receipt is stored privately and can only be opened by an authorized Owner or Admin.</p><div className="payment-summary"><span>Customer</span><strong>{customerName}</strong><span>Tracking</span><strong>{trackingNumber}</strong><span>Amount</span><strong>₱{(bookingRecord?.totalAmount || total).toLocaleString()}</strong></div></div>
+            <div className="proof-form"><span className="step-number">03</span><h4>Submit payment proof</h4><label>Reference number<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="(optional)" /></label><label className="file-upload">Receipt or screenshot<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf" onChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setProofFile(file); setCheckoutMessage(''); } catch (error) { setProofFile(null); setCheckoutMessage(error.message); event.target.value = ''; } }} /><span>{proofFile?.name || 'Choose an image or PDF (20 MB max)'}</span></label>{checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}<p>HEIC, HEIF, and WebP phone images are converted securely to JPEG before upload. The receipt is stored privately for Owner/Admin review.</p><div className="payment-summary"><span>Customer</span><strong>{customerName}</strong><span>Tracking</span><strong>{trackingNumber}</strong><span>Amount</span><strong>₱{(bookingRecord?.totalAmount || total).toLocaleString()}</strong></div></div>
           </div>
           <div className="checkout-footer"><span className="hold-notice">Reserved until {bookingRecord?.holdExpiresAt ? new Date(bookingRecord.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }) : '—'}</span><button className="primary" disabled={!paymentReady || bookingSubmitting} onClick={submitPaymentProof}>{bookingSubmitting ? 'Uploading securely…' : 'Submit payment proof'} <span>→</span></button></div>
         </>}

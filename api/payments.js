@@ -6,9 +6,6 @@ const maxReceiptBytes = 20 * 1024 * 1024;
 const allowedTypes = new Map([
   ['image/jpeg', 'jpg'],
   ['image/png', 'png'],
-  ['image/webp', 'webp'],
-  ['image/heic', 'heic'],
-  ['image/heif', 'heif'],
   ['application/pdf', 'pdf'],
 ]);
 
@@ -29,7 +26,7 @@ export default async function handler(request, response) {
     if (request.method === 'POST') {
       const mimeType = String(body.mimeType || '').toLowerCase();
       const fileSize = Number(body.fileSize || 0);
-      if (!allowedTypes.has(mimeType)) return sendJson(response, 400, { error: 'Upload a JPG, PNG, WebP, HEIC, HEIF, or PDF receipt.' });
+      if (!allowedTypes.has(mimeType)) return sendJson(response, 400, { error: 'Upload a JPG, PNG, or PDF receipt.' });
       if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize > maxReceiptBytes) return sendJson(response, 400, { error: 'The receipt must be a non-empty file no larger than 20 MB.' });
       const extension = allowedTypes.get(mimeType);
       const path = `${booking.id}/${randomUUID()}.${extension}`;
