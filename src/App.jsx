@@ -367,7 +367,7 @@ function App() {
               />
             </div>
           </div>
-          <a className="hero-icon-link facebook-link" href="https://www.facebook.com/profile.php?id=61591695621672&sk=photos" target="_blank" rel="noreferrer" aria-label="Open Pickle Point Arena on Facebook"><span>f</span></a>
+          <a className="hero-icon-link facebook-link" href="https://www.facebook.com/share/1GuGPXVPe6/" target="_blank" rel="noreferrer" aria-label="Open Pickle Point Arena on Facebook"><span>f</span></a>
           <div className="availability-pill"><span /> {courtsOpenTonight} courts open tonight</div>
           <a className="hero-icon-link location-link" href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer" aria-label="Open Pickle Point Arena location in Google Maps"><span className="location-pin-icon"><i /></span></a>
           <div className="rate-pill"><small>EVENING RATE</small><strong>₱350/hr</strong></div>
@@ -414,7 +414,7 @@ function App() {
         <div><strong>Hours</strong><span>Monday–Sunday</span><span>6:00 AM–2:00 AM</span></div>
         <div><strong>Rates</strong><span>₱300 · 6AM - 4PM</span><span>₱350 · 4PM - 2AM</span></div>
         <div><strong>Quick links</strong><button onClick={() => navigate('booking')}>Book a court</button><button onClick={() => navigate('tracking')}>Track booking</button></div>
-        <div><strong>Contact</strong><a href="mailto:picklepointarenabukidnon@gmail.com">picklepointarenabukidnon@gmail.com</a><a href="https://www.facebook.com/profile.php?id=61591695621672&sk=photos" target="_blank" rel="noreferrer">Facebook page ↗</a><a href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer">Guinoyuran Rd, Valencia City ↗</a></div>
+        <div><strong>Contact</strong><a href="mailto:picklepointarenabukidnon@gmail.com">picklepointarenabukidnon@gmail.com</a><a href="https://www.facebook.com/share/1GuGPXVPe6/" target="_blank" rel="noreferrer">Facebook page ↗</a><a href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer">Guinoyuran Rd, Valencia City ↗</a></div>
       </footer>
     </main>
   );
@@ -902,7 +902,7 @@ function LocationPreview() {
         />
         <a href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer">Open in Google Maps ↗</a>
       </div>
-      <div className="location-copy"><span className="eyebrow dark">VISIT THE ARENA</span><h2>Find your way<br />to the court.</h2><p>Visit Pickle Point Arena in Valencia City or contact the venue directly for assistance.</p><div className="location-detail"><small>VENUE ADDRESS</small><strong>Guinoyuran Rd, Valencia City, Bukidnon, Philippines</strong></div><div className="location-detail"><small>EMAIL</small><a href="mailto:picklepointarenabukidnon@gmail.com">picklepointarenabukidnon@gmail.com</a></div><div className="location-detail"><small>FACEBOOK</small><a href="https://www.facebook.com/profile.php?id=61591695621672&sk=photos" target="_blank" rel="noreferrer">Visit the Pickle Point Arena Facebook page ↗</a></div><div className="location-detail"><small>OPERATING HOURS</small><strong>Monday–Sunday · 6:00 AM–2:00 AM</strong></div><a className="primary" href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer">Get directions <span>↗</span></a></div>
+      <div className="location-copy"><span className="eyebrow dark">VISIT THE ARENA</span><h2>Find your way<br />to the court.</h2><p>Visit Pickle Point Arena in Valencia City or contact the venue directly for assistance.</p><div className="location-detail"><small>VENUE ADDRESS</small><strong>Guinoyuran Rd, Valencia City, Bukidnon, Philippines</strong></div><div className="location-detail"><small>EMAIL</small><a href="mailto:picklepointarenabukidnon@gmail.com">picklepointarenabukidnon@gmail.com</a></div><div className="location-detail"><small>FACEBOOK</small><a href="https://www.facebook.com/share/1GuGPXVPe6/" target="_blank" rel="noreferrer">Visit the Pickle Point Arena Facebook page ↗</a></div><div className="location-detail"><small>OPERATING HOURS</small><strong>Monday–Sunday · 6:00 AM–2:00 AM</strong></div><a className="primary" href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer">Get directions <span>↗</span></a></div>
     </div>
   );
 }
