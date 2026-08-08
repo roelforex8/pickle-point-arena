@@ -36,7 +36,7 @@ export default async function handler(request, response) {
       return sendJson(response, 200, { path, token: data.token });
     }
 
-    const referenceNumber = String(body.referenceNumber || '').trim();
+    const referenceNumber = String(body.referenceNumber || '').trim() || 'Not provided';
     const receiptPath = String(body.receiptPath || '');
     if (!receiptPath.startsWith(`${booking.id}/`)) return sendJson(response, 400, { error: 'Upload the payment receipt.' });
 
@@ -65,6 +65,7 @@ export default async function handler(request, response) {
       message: `${booking.customer_name} submitted payment proof for ₱${Number(booking.total_amount).toLocaleString('en-PH')}.`,
     });
     booking.status = 'payment_submitted';
+    booking.booking_slots = (booking.booking_slots || []).map((slot) => slot.status === 'held' ? { ...slot, status: 'payment_submitted' } : slot);
     booking.payments = [{ method: 'gcash', status: 'pending_verification', submitted_at: paymentRecord.submitted_at }];
     console.log('[api/payments] payment proof finalized', { bookingId: booking.id, receiptPath });
     return sendJson(response, 200, { booking: publicBookingPayload(booking) });
