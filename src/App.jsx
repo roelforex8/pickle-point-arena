@@ -4,28 +4,52 @@ import { supabase } from './supabase';
 const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
 const courtGalleryPhotos = [
   {
-    src: '/arena-covered-courts-v1.png?v=20260801',
-    alt: 'Covered indoor pickleball courts beneath the steel-truss roof at Pickle Point Arena',
-    label: 'INDOOR COURTS',
-    title: 'Covered courts',
+    src: '/arena-gallery-01.jpg',
+    alt: 'Full view down the center line of the six covered courts at Pickle Point Arena',
+    label: 'PICKLE POINT ARENA',
+    title: 'Six courts under one roof',
   },
   {
-    src: '/court-action-wide-v1.png?v=20260801',
-    alt: 'Three players enjoying a pickleball game on Court 3 in front of the Pickle Point Arena service window and branded wall',
-    label: 'COURT 3 · ACTION VIEW',
-    title: 'Play at Court 3',
+    src: '/arena-gallery-02.jpg',
+    alt: 'Close view of a pickleball net and orange court surface at Pickle Point Arena',
+    label: 'COURT DETAIL',
+    title: 'Competition-ready nets',
   },
   {
-    src: '/court-gallery-01.png',
-    alt: 'Wide view of the covered pickleball courts at Pickle Point Arena',
-    label: 'COURT PHOTO',
-    title: 'The Arena',
+    src: '/arena-gallery-03.jpg',
+    alt: 'Diagonal view across the orange and blue courts at Pickle Point Arena',
+    label: 'COURTS 01–06',
+    title: 'Built for play',
   },
   {
-    src: '/court-gallery-02.png',
-    alt: 'Pickleball court view inside Pickle Point Arena',
-    label: 'COURT PHOTO',
-    title: 'Court view',
+    src: '/arena-gallery-04.jpg',
+    alt: 'Centered overhead view of the pickleball courts and nets',
+    label: 'COURT LINES',
+    title: 'A fresh playing surface',
+  },
+  {
+    src: '/arena-gallery-05.jpg',
+    alt: 'Wide elevated view of all six covered Pickle Point Arena courts',
+    label: 'FULL ARENA',
+    title: 'Room for every rally',
+  },
+  {
+    src: '/arena-gallery-06.jpg',
+    alt: 'Pickle Point Arena logo on an orange court behind the net',
+    label: 'HOME COURT',
+    title: 'Pickle Point pride',
+  },
+  {
+    src: '/arena-gallery-07.jpg',
+    alt: 'Close diagonal view along several pickleball nets at Pickle Point Arena',
+    label: 'NET VIEW',
+    title: 'Ready for the next match',
+  },
+  {
+    src: '/arena-gallery-08.jpg',
+    alt: 'Geometric view of the orange and blue pickleball courts and nets',
+    label: 'ARENA VIEW',
+    title: 'Your court is waiting',
   },
 ];
 const heroCourtPhotos = courtGalleryPhotos;
@@ -760,11 +784,7 @@ function CourtsPreview({ onBook }) {
       <div className="content-heading"><span className="eyebrow dark">OUR COURTS</span><h2>Six courts.<br />One home for play.</h2><p>A spacious covered venue designed for comfortable play from early morning until late at night.</p></div>
       <div className="court-gallery">
         {galleryImages.map((image, index) => {
-          const galleryClass = index === 0
-            ? 'venue-photo gallery-item floor-plan-feature'
-            : index === 1
-              ? 'venue-photo gallery-item venue-photo-small'
-              : 'venue-photo gallery-item venue-photo-third';
+          const galleryClass = `venue-photo gallery-item${index === 0 || index === 4 ? ' gallery-feature' : ''}`;
 
           return (
             <figure

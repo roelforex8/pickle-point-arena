@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .vite/
+.vite-gallery-test.log
 .DS_Store
 .env
 .env.local
