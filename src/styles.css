@@ -805,23 +805,23 @@ button { cursor: pointer; }
 .recent-decision-list { min-height: 0; flex: 1; margin-top: 13px; padding-top: 0; overflow-y: auto; border-top: 1px solid var(--line); scrollbar-gutter: stable; }
 .recent-activity-empty { margin: 18px 0 0; padding: 24px; border: 1px dashed var(--line); color: #858c85; font-size: 10px; text-align: center; }
 .review-heading { display: flex; justify-content: space-between; align-items: start; gap: 20px; }
-.review-heading small, .review-list small { color: #858c85; font: 700 8px monospace; letter-spacing: .13em; }
-.review-heading h3 { margin: 7px 0 4px; font-size: 22px; }
-.review-heading p { margin: 0; color: #7b827b; font-size: 10px; }
-.review-heading > button { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--forest); font-size: 9px; font-weight: 900; }
-.review-message { padding: 10px; background: #eef4ed; color: var(--forest); font-size: 10px; font-weight: 800; }
-.review-empty { margin: 18px 0 0; padding: 22px; border: 1px dashed var(--line); color: #858c85; font-size: 10px; text-align: center; }
+.review-heading small, .review-list small { color: #858c85; font: 700 12px monospace; letter-spacing: .13em; }
+.review-heading h3 { margin: 7px 0 4px; font-size: 33px; }
+.review-heading p { margin: 0; color: #7b827b; font-size: 15px; }
+.review-heading > button { min-height: 42px; padding: 0 15px; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--forest); font-size: 13.5px; font-weight: 900; }
+.review-message { padding: 10px; background: #eef4ed; color: var(--forest); font-size: 15px; font-weight: 800; }
+.review-empty { margin: 18px 0 0; padding: 22px; border: 1px dashed var(--line); color: #858c85; font-size: 15px; text-align: center; }
 .review-list { margin-top: 18px; display: grid; gap: 7px; }
 .review-list article { padding: 14px; display: grid; grid-template-columns: 1.1fr .65fr .8fr auto; align-items: center; gap: 18px; border: 1px solid var(--line); border-radius: 4px; background: #fafaf7; }
 .review-list article > div:not(.review-actions) { display: flex; flex-direction: column; gap: 4px; }
-.review-list strong { font-size: 11px; }
-.review-list span { color: #7d847d; font-size: 9px; }
-.review-list time { margin-top: 2px; color: var(--orange); font-size: 8px; font-weight: 800; }
+.review-list strong { font-size: 16.5px; }
+.review-list span { color: #7d847d; font-size: 13.5px; }
+.review-list time { margin-top: 2px; color: var(--orange); font-size: 12px; font-weight: 800; }
 .review-actions { display: flex; align-items: center; gap: 6px; }
-.review-actions .receipt-expired { max-width: 105px; color: #8a6c23; font-size: 8px; font-weight: 800; line-height: 1.35; text-align: center; }
-.review-actions a, .review-actions button { min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--forest); font-size: 8px; font-weight: 900; text-decoration: none; }
+.review-actions .receipt-expired { max-width: 158px; color: #8a6c23; font-size: 12px; font-weight: 800; line-height: 1.35; text-align: center; }
+.review-actions a, .review-actions button { min-height: 42px; padding: 0 13px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--forest); font-size: 12px; font-weight: 900; text-decoration: none; }
 .review-actions .reject { color: var(--orange); }
-.review-actions .confirm { min-width: 112px; min-height: 50px; padding: 0 20px; align-items: center; justify-content: center; border-color: var(--forest); background: var(--forest); color: white; font-size: 12px; line-height: 1; text-align: center; }
+.review-actions .confirm { min-width: 150px; min-height: 58px; padding: 0 22px; align-items: center; justify-content: center; border-color: var(--forest); background: var(--forest); color: white; font-size: 18px; line-height: 1; text-align: center; }
 .decision-history { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
 .decision-history > div > small { color: #858c85; font: 700 8px monospace; letter-spacing: .13em; }
 .decision-history > div > h4 { margin: 7px 0 3px; font-size: 16px; }
