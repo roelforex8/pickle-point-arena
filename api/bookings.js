@@ -1,6 +1,6 @@
 import { getAdminClient, sendJson } from './_supabase.js';
 
-function courtRate(slotStart) {
+function courtHour(slotStart) {
   const hourPart = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Manila',
     hour: '2-digit',
@@ -8,6 +8,11 @@ function courtRate(slotStart) {
   }).formatToParts(new Date(slotStart)).find((part) => part.type === 'hour');
   const hour = Number(hourPart?.value);
   if (!Number.isInteger(hour)) throw new Error('A selected booking time is invalid.');
+  return hour;
+}
+
+function courtRate(slotStart) {
+  const hour = courtHour(slotStart);
   return hour >= 6 && hour < 16 ? 300 : 350;
 }
 
@@ -29,6 +34,14 @@ export default async function handler(request, response) {
       return sendJson(response, 400, { error: 'Enter a valid full name, email address, and mobile number.' });
     }
     const slots = Array.isArray(body.slots) ? body.slots.map((slot) => ({ court_id: Number(slot.courtId), slot_start: String(slot.slotStart) })) : [];
+    if (!slots.length || slots.some((slot) => {
+      try {
+        const hour = courtHour(slot.slot_start);
+        return hour < 6 || hour > 23;
+      } catch {
+        return true;
+      }
+    })) return sendJson(response, 400, { error: 'Bookings are available from 6:00 AM to 12:00 AM Philippine time.' });
     const { data, error } = await admin.rpc('create_public_booking', { p_customer_name: customerName, p_customer_email: customerEmail, p_slots: slots });
     if (error) return sendJson(response, 400, { error: error.message });
     const booking = data?.[0];

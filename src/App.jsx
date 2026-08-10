@@ -53,7 +53,7 @@ const courtGalleryPhotos = [
   },
 ];
 const heroCourtPhotos = courtGalleryPhotos;
-const hours = Array.from({ length: 20 }, (_, index) => (6 + index) % 24);
+const hours = Array.from({ length: 18 }, (_, index) => 6 + index);
 
 const statusDetails = {
   past: { label: 'Past time — not booked', short: 'Not booked' },
@@ -152,6 +152,17 @@ function relativeTime(timestamp) {
 function activityTimestamp(timestamp) {
   if (!timestamp) return '';
   return new Date(timestamp).toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+}
+
+function philippineGreeting(date = new Date()) {
+  const hour = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    hour: 'numeric',
+    hourCycle: 'h23',
+  }).format(date));
+  if (hour < 12) return 'Good morning.';
+  if (hour < 18) return 'Good afternoon.';
+  return 'Good evening.';
 }
 
 function receiptScheduleSummary(slots = []) {
@@ -324,7 +335,7 @@ function App() {
           </div>
           <div className="hero-facts">
             <div><strong>6</strong><span>Courts</span></div>
-            <div><strong>6AM–2AM</strong><span>Open daily</span></div>
+            <div><strong>6AM–12AM</strong><span>Open daily</span></div>
             <div><strong>₱300</strong><span>Starting rate</span></div>
           </div>
         </div>
@@ -411,8 +422,8 @@ function App() {
 
       <footer>
         <div className="footer-brand"><div className="footer-logo-lockup"><img src="/footer-logo-black.png" alt="Pickle Point Arena Valencia Bukidnon" /></div></div>
-        <div><strong>Hours</strong><span>Monday–Sunday</span><span>6:00 AM–2:00 AM</span></div>
-        <div><strong>Rates</strong><span>₱300 · 6AM - 4PM</span><span>₱350 · 4PM - 2AM</span></div>
+        <div><strong>Hours</strong><span>Monday–Sunday</span><span>6:00 AM–12:00 AM</span></div>
+        <div><strong>Rates</strong><span>₱300 · 6AM - 4PM</span><span>₱350 · 4PM - 12AM</span></div>
         <div><strong>Quick links</strong><button onClick={() => navigate('booking')}>Book a court</button><button onClick={() => navigate('tracking')}>Track booking</button></div>
         <div><strong>Contact</strong><a href="mailto:picklepointarenabukidnon@gmail.com">picklepointarenabukidnon@gmail.com</a><a href="https://www.facebook.com/share/1GuGPXVPe6/" target="_blank" rel="noreferrer">Facebook page ↗</a><a href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer">Guinoyuran Rd, Valencia City ↗</a></div>
       </footer>
@@ -474,7 +485,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
   const refreshAvailability = useCallback(async () => {
     setAvailabilityLoading(true);
     const from = manilaSlotIso(selectedDate, 6);
-    const to = manilaSlotIso(selectedDate, 2);
+    const to = manilaSlotIso(selectedDate, 0);
     const response = await fetch(`/api/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
     const result = await response.json();
     if (!response.ok) {
@@ -706,13 +717,13 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
   return (
     <div className="portal-shell calendar-portal">
       <div className="portal-heading">
-        <div><span className="eyebrow dark">LIVE COURT AVAILABILITY</span><h2>Choose your game time.</h2><p>Open daily from 6:00 AM to 2:00 AM. Select consecutive hours or multiple courts.</p></div>
+        <div><span className="eyebrow dark">LIVE COURT AVAILABILITY</span><h2>Choose your game time.</h2><p>Open daily from 6:00 AM to 12:00 AM. Select consecutive hours or multiple courts.</p></div>
       </div>
 
       <div className="calendar-toolbar">
         <div className="calendar-date-controls"><button className="refresh-button" aria-label="Refresh availability" onClick={refreshAvailability} disabled={availabilityLoading}>{availabilityLoading ? '…' : '↻'}</button><label className="date-picker">Select date<input type="date" min={today} value={selectedDate} onChange={(event) => chooseDate(event.target.value)} /></label></div>
         <a className="find-booking open-play-link" href="https://reclub.co/clubs/@pickle-point-arena" target="_blank" rel="noopener noreferrer">Join Open Play <span>↗</span></a>
-        <div className="rate-guide"><span><b>₱300</b> 6AM - 4PM</span><span><b>₱350</b> 4PM - 2AM</span></div>
+        <div className="rate-guide"><span><b>₱300</b> 6AM - 4PM</span><span><b>₱350</b> 4PM - 12AM</span></div>
       </div>
 
       {recentSubmissions.length > 0 && <div className="submission-history">{recentSubmissions.map((submission, index) => <aside className="submission-receipt" role={index === 0 ? 'status' : undefined} key={`${submission.trackingNumber}-${submission.submittedAt}`}><span className="result-icon">✓</span><div><small>PAYMENT PROOF SUBMITTED · PENDING REVIEW</small><strong>{submission.trackingNumber}</strong><p>{submission.customerName} · {submission.courtHours} court-hour{submission.courtHours === 1 ? '' : 's'} · ₱{Number(submission.totalAmount).toLocaleString()}</p><time dateTime={submission.submittedAt}>{activityTimestamp(submission.submittedAt)} Philippine time</time>{index === 0 && <em>The previous selection was cleared. Select another white slot to create a new booking with a different tracking number.</em>}</div><div><button type="button" onClick={() => navigator.clipboard?.writeText(submission.trackingNumber)}>Copy tracking</button><button type="button" onClick={() => setRecentSubmissions((current) => current.filter((item) => item.trackingNumber !== submission.trackingNumber))}>Dismiss</button></div></aside>)}</div>}
@@ -902,7 +913,7 @@ function LocationPreview() {
         />
         <a href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer">Open in Google Maps ↗</a>
       </div>
-      <div className="location-copy"><span className="eyebrow dark">VISIT THE ARENA</span><h2>Find your way<br />to the court.</h2><p>Visit Pickle Point Arena in Valencia City or contact the venue directly for assistance.</p><div className="location-detail"><small>VENUE ADDRESS</small><strong>Guinoyuran Rd, Valencia City, Bukidnon, Philippines</strong></div><div className="location-detail"><small>EMAIL</small><a href="mailto:picklepointarenabukidnon@gmail.com">picklepointarenabukidnon@gmail.com</a></div><div className="location-detail"><small>FACEBOOK</small><a href="https://www.facebook.com/share/1GuGPXVPe6/" target="_blank" rel="noreferrer">Visit the Pickle Point Arena Facebook page ↗</a></div><div className="location-detail"><small>OPERATING HOURS</small><strong>Monday–Sunday · 6:00 AM–2:00 AM</strong></div><a className="primary" href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer">Get directions <span>↗</span></a></div>
+      <div className="location-copy"><span className="eyebrow dark">VISIT THE ARENA</span><h2>Find your way<br />to the court.</h2><p>Visit Pickle Point Arena in Valencia City or contact the venue directly for assistance.</p><div className="location-detail"><small>VENUE ADDRESS</small><strong>Guinoyuran Rd, Valencia City, Bukidnon, Philippines</strong></div><div className="location-detail"><small>EMAIL</small><a href="mailto:picklepointarenabukidnon@gmail.com">picklepointarenabukidnon@gmail.com</a></div><div className="location-detail"><small>FACEBOOK</small><a href="https://www.facebook.com/share/1GuGPXVPe6/" target="_blank" rel="noreferrer">Visit the Pickle Point Arena Facebook page ↗</a></div><div className="location-detail"><small>OPERATING HOURS</small><strong>Monday–Sunday · 6:00 AM–12:00 AM</strong></div><a className="primary" href="https://www.google.com/maps/search/?api=1&query=Guinoyuran%20Rd%2C%20Valencia%20City%2C%20Bukidnon%2C%20Philippines" target="_blank" rel="noreferrer">Get directions <span>↗</span></a></div>
     </div>
   );
 }
@@ -1165,7 +1176,7 @@ function OperationsCalendar({ selectedDate, setSelectedDate, refreshKey, role, s
     const requestId = ++loadRequestRef.current;
     if (showLoading) setCalendarMessage('Loading live schedule…');
     const rangeStart = manilaSlotIso(selectedDate, 6);
-    const rangeEnd = manilaSlotIso(selectedDate, 2);
+    const rangeEnd = manilaSlotIso(selectedDate, 0);
     if (!session?.access_token) return;
     const response = await fetch(`/api/staff-schedule?from=${encodeURIComponent(rangeStart)}&to=${encodeURIComponent(rangeEnd)}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
     const result = await response.json();
@@ -1521,6 +1532,7 @@ function OwnerSalesReport({ session, refreshKey }) {
 
 function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }) {
   const [refreshKey, setRefreshKey] = useState(0);
+  const [dashboardGreeting, setDashboardGreeting] = useState(() => philippineGreeting());
   const [blockStartDate, setBlockStartDate] = useState(selectedDate);
   const [blockEndDate, setBlockEndDate] = useState(selectedDate);
   const [blockDays, setBlockDays] = useState(() => new Set([0, 1, 2, 3, 4, 5, 6]));
@@ -1587,6 +1599,12 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
     if (!error) setNotifications(data || []);
   };
 
+  useEffect(() => {
+    const updateGreeting = () => setDashboardGreeting(philippineGreeting());
+    updateGreeting();
+    const timer = window.setInterval(updateGreeting, 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   useEffect(() => { loadAdmins(); }, [role, session?.access_token]);
   useEffect(() => {
     if (role !== 'owner' || !session?.access_token) return;
@@ -1910,7 +1928,7 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
   return (
     <div className="dashboard">
       <section className="dashboard-zone dashboard-intro-zone">
-      <div className="dashboard-top"><div><span className="eyebrow dark">{role === 'owner' ? 'OWNER DASHBOARD' : 'ADMIN DASHBOARD'}</span><h2>Good morning.</h2><p>Live venue operations for bookings, payments, staff access, and court availability.</p></div></div>
+      <div className="dashboard-top"><div><span className="eyebrow dark">{role === 'owner' ? 'OWNER DASHBOARD' : 'ADMIN DASHBOARD'}</span><h2>{dashboardGreeting}</h2><p>Live venue operations for bookings, payments, staff access, and court availability.</p></div></div>
 
       <PaymentReview session={session} refreshKey={refreshKey} onChanged={() => setRefreshKey((value) => value + 1)} activityPanel={activityPanel} />
       </section>

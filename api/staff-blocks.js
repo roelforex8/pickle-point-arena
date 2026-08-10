@@ -7,7 +7,7 @@ function selectionInterval(selection) {
   const date = String(selection?.date || '');
   const hour = Number(selection?.hour);
   const courtId = Number(selection?.courtId);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isInteger(hour) || hour < 6 || hour > 25 || !Number.isInteger(courtId) || courtId < 1 || courtId > 6) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isInteger(hour) || hour < 6 || hour > 23 || !Number.isInteger(courtId) || courtId < 1 || courtId > 6) return null;
   const dayOffset = hour >= 24 ? 1 : 0;
   const normalizedHour = hour % 24;
   const start = new Date(`${date}T${String(normalizedHour).padStart(2, '0')}:00:00+08:00`);
