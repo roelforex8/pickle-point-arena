@@ -464,6 +464,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
   const [bookingRecord, setBookingRecord] = useState(null);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [recentSubmissions, setRecentSubmissions] = useState([]);
+  const [checkoutSelection, setCheckoutSelection] = useState([]);
   const bookingRecordRef = useRef(null);
   const reservationSubmittingRef = useRef(false);
   const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
@@ -528,6 +529,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
           if (result.booking.status === 'expired') {
             bookingRecordRef.current = null;
             setSelectedSlots((current) => new Set([...current].filter((key) => !key.startsWith(`${selectedDate}|`))));
+            setCheckoutSelection([]);
             setCheckoutOpen(false);
             setSelectionMessage('The 15-minute payment hold expired. The slots are available to select again.');
           } else bookingRecordRef.current = result.booking;
@@ -559,6 +561,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
     setSelectedSlots(new Set());
     bookingRecordRef.current = null;
     setBookingRecord(null);
+    setCheckoutSelection([]);
     setCheckoutOpen(false);
   };
 
@@ -595,7 +598,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
   };
 
   const selectedForDate = [...selectedSlots].filter((key) => key.startsWith(`${selectedDate}|`) && !isPastHour(Number(key.split('|')[1])));
-  const selectedSchedule = selectedForDate
+  const scheduleFor = (selection) => selection
     .map((key) => {
       const [, hourValue, courtValue] = key.split('|');
       const hour = Number(hourValue);
@@ -603,12 +606,12 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       return { key, hour, courtIndex, order: (hours.indexOf(hour) * courtNames.length) + courtIndex };
     })
     .sort((first, second) => first.order - second.order);
-  const rental = selectedForDate.reduce((sum, key) => {
+  const checkoutSchedule = scheduleFor(checkoutSelection);
+  const checkoutRental = checkoutSelection.reduce((sum, key) => {
     const hour = Number(key.split('|')[1]);
     return sum + (hour >= 6 && hour < 16 ? 300 : 350);
   }, 0);
-  const bookingFee = selectedForDate.length * 10;
-  const total = rental + bookingFee;
+  const checkoutTotal = checkoutRental + checkoutSelection.length * 10;
   const customerReady = customerName.trim().length > 1 && /^\S+@\S+\.\S+$/.test(customerEmail) && customerMobile.replace(/\D/g, '').length >= 10;
   const paymentReady = Boolean(proofFile);
 
@@ -634,6 +637,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
     }
     setCheckoutStage('details');
     setCheckoutMessage('');
+    setCheckoutSelection(selectedForDate);
     setCheckoutOpen(true);
     window.setTimeout(() => document.querySelector('.checkout-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
   };
@@ -644,6 +648,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       return;
     }
     setSelectedSlots(new Set());
+    setCheckoutSelection([]);
     setCheckoutOpen(false);
     setSelectionMessage('');
   };
@@ -659,7 +664,13 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
     reservationSubmittingRef.current = true;
     setCheckoutMessage('');
     setSelectionMessage('');
-    const slots = selectedForDate.map((key) => {
+    if (!checkoutSelection.length) {
+      setCheckoutMessage('Your selected slots changed. Close this window and review the available schedule again.');
+      setBookingSubmitting(false);
+      reservationSubmittingRef.current = false;
+      return;
+    }
+    const slots = checkoutSelection.map((key) => {
       const [, hour, courtIndex] = key.split('|');
       return { courtId: Number(courtIndex) + 1, slotStart: manilaSlotIso(selectedDate, Number(hour)) };
     });
@@ -695,13 +706,14 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       const booking = await uploadPaymentProof({ lookupMethod: 'tracking', lookupValue: trackingNumber, referenceNumber: paymentReference, file: proofFile });
       const completedTracking = booking.trackingNumber || trackingNumber;
       const submittedAt = booking.payment?.submittedAt || new Date().toISOString();
-      setRecentSubmissions((current) => [{ trackingNumber: completedTracking, submittedAt, totalAmount: booking.totalAmount || total, customerName, courtHours: selectedForDate.length }, ...current].slice(0, 5));
+      setRecentSubmissions((current) => [{ trackingNumber: completedTracking, submittedAt, totalAmount: booking.totalAmount || checkoutTotal, customerName, courtHours: checkoutSelection.length }, ...current].slice(0, 5));
       bookingRecordRef.current = null;
       setBookingRecord(null);
       setSelectedSlots(new Set());
       setTrackingNumber('');
       setPaymentReference('');
       setProofFile(null);
+      setCheckoutSelection([]);
       setCustomerName('');
       setCustomerMobile('');
       setCheckoutStage('details');
@@ -766,14 +778,14 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       {selectionMessage && <p className="selection-message" role="alert">{selectionMessage}</p>}
       <p className="booking-policy">Selected slots are held for 15 minutes after reservation. Full payment is required. All confirmed bookings are non-refundable and cannot be cancelled.</p>
 
-      {checkoutOpen && selectedForDate.length > 0 && <>
+      {checkoutOpen && checkoutSelection.length > 0 && <>
         {checkoutStage === 'details' && <div className="reservation-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCheckoutOpen(false); }}>
           <form className="reservation-modal" role="dialog" aria-modal="true" aria-labelledby="reservation-title" onSubmit={createReservation}>
             <header><h3 id="reservation-title">Confirm Reservation</h3><button type="button" onClick={() => setCheckoutOpen(false)} aria-label="Close confirmation">×</button></header>
             <div className="reservation-summary">
               <div className="reservation-date"><small>{activeDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</small><strong>{activeDate.getDate()}</strong></div>
               <div className="reservation-summary-copy"><strong>Booking Summary</strong><span>{activeDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span></div>
-              <div className="reservation-slots">{selectedSchedule.map((slot) => <div key={slot.key}><span><strong>{courtNames[slot.courtIndex]}</strong><small>{timeRange(slot.hour)}</small></span><b>₱{(slot.hour >= 6 && slot.hour < 16 ? 310 : 360).toLocaleString()}</b></div>)}</div>
+              <div className="reservation-slots">{checkoutSchedule.map((slot) => <div key={slot.key}><span><strong>{courtNames[slot.courtIndex]}</strong><small>{timeRange(slot.hour)}</small></span><b>₱{(slot.hour >= 6 && slot.hour < 16 ? 310 : 360).toLocaleString()}</b></div>)}</div>
             </div>
             <div className="reservation-form">
               <label><span><b>*</b> Full Name</span><input value={customerName} onChange={(event) => { setCustomerName(event.target.value); setCheckoutMessage(''); }} placeholder="John Doe" autoComplete="name" required /></label>
@@ -781,7 +793,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
               <label><span><b>*</b> Mobile Number</span><input type="tel" inputMode="tel" pattern="[+0-9() -]{10,24}" value={customerMobile} maxLength={24} onChange={(event) => { setCustomerMobile(event.target.value); setCheckoutMessage(''); }} placeholder="+63 912 345 6789" autoComplete="tel" required /></label>
               {checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}
             </div>
-            <div className="reservation-total"><span>Selected Slots:<b>{selectedForDate.length}</b></span><strong>Total Amount:<b>₱{total.toLocaleString()}</b></strong></div>
+            <div className="reservation-total"><span>Selected Slots:<b>{checkoutSelection.length}</b></span><strong>Total Amount:<b>₱{checkoutTotal.toLocaleString()}</b></strong></div>
             <button className="confirm-pay" type="submit" disabled={bookingSubmitting}>{bookingSubmitting ? 'Reserving slots…' : 'Confirm & Pay'}</button>
           </form>
         </div>}
@@ -793,21 +805,21 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
         {checkoutStage === 'payment' && <>
           <div className="payment-confirmation-banner" role="status">
             <small>PLEASE VERIFY BEFORE PAYING</small>
-            <div className="payment-confirmation-total"><span>Exact amount to pay</span><strong>₱{(bookingRecord?.totalAmount || total).toLocaleString()}</strong></div>
+            <div className="payment-confirmation-total"><span>Exact amount to pay</span><strong>₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</strong></div>
             <div className="payment-confirmation-schedule">
               <span>Booking schedule</span>
               <strong>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</strong>
-              <ul>{selectedSchedule.map((slot) => <li key={slot.key}>{courtNames[slot.courtIndex]} · {timeRange(slot.hour)}</li>)}</ul>
+              <ul>{checkoutSchedule.map((slot) => <li key={slot.key}>{courtNames[slot.courtIndex]} · {timeRange(slot.hour)}</li>)}</ul>
             </div>
           </div>
           <div className="payment-stage">
-            <div className="payment-choice"><span className="step-number">02</span><h4>Payment method</h4><div className="payment-tabs"><button className="active"><strong>GCash</strong><small>Available now</small></button><button disabled><strong>Maya</strong><small>Coming soon</small></button><button disabled><strong>Metrobank</strong><small>Coming soon</small></button></div><div className="qr-payment"><div className="qr-frame"><img src="/gcash-qr-hd.png" alt="High-resolution GCash QR code for Pickle Point Arena payment" /></div><div><span className="gcash-label">GCASH PAYMENT</span><h4>Scan and pay ₱{total.toLocaleString()}</h4><p>Enter the exact amount shown. Transfer fees may apply.</p><a href="/gcash-qr-hd.png" download="Pickle-Point-Arena-GCash-QR.png">↓ Download GCash QR</a></div></div></div>
-            <div className="proof-form"><span className="step-number">03</span><h4>Submit payment proof</h4><label>Reference number<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="(optional)" /></label><label className="file-upload">Receipt or screenshot<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf" onChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setProofFile(file); setCheckoutMessage(''); } catch (error) { setProofFile(null); setCheckoutMessage(error.message); event.target.value = ''; } }} /><span>{proofFile?.name || 'Choose an image or PDF (20 MB max)'}</span></label>{checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}<p>HEIC, HEIF, and WebP phone images are converted securely to JPEG before upload. The receipt is stored privately for Owner/Admin review.</p><div className="payment-summary"><span>Customer</span><strong>{customerName}</strong><span>Tracking</span><strong>{trackingNumber}</strong><span>Amount</span><strong>₱{(bookingRecord?.totalAmount || total).toLocaleString()}</strong></div></div>
+            <div className="payment-choice"><span className="step-number">02</span><h4>Payment method</h4><div className="payment-tabs"><button className="active"><strong>GCash</strong><small>Available now</small></button><button disabled><strong>Maya</strong><small>Coming soon</small></button><button disabled><strong>Metrobank</strong><small>Coming soon</small></button></div><div className="qr-payment"><div className="qr-frame"><img src="/gcash-qr-hd.png" alt="High-resolution GCash QR code for Pickle Point Arena payment" /></div><div><span className="gcash-label">GCASH PAYMENT</span><h4>Scan and pay ₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</h4><p>Enter the exact amount shown. Transfer fees may apply.</p><a href="/gcash-qr-hd.png" download="Pickle-Point-Arena-GCash-QR.png">↓ Download GCash QR</a></div></div></div>
+            <div className="proof-form"><span className="step-number">03</span><h4>Submit payment proof</h4><label>Reference number<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="(optional)" /></label><label className="file-upload">Receipt or screenshot<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf" onChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setProofFile(file); setCheckoutMessage(''); } catch (error) { setProofFile(null); setCheckoutMessage(error.message); event.target.value = ''; } }} /><span>{proofFile?.name || 'Choose an image or PDF (20 MB max)'}</span></label>{checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}<p>HEIC, HEIF, and WebP phone images are converted securely to JPEG before upload. The receipt is stored privately for Owner/Admin review.</p><div className="payment-summary"><span>Customer</span><strong>{customerName}</strong><span>Tracking</span><strong>{trackingNumber}</strong><span>Amount</span><strong>₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</strong></div></div>
           </div>
           <div className="checkout-footer"><span className="hold-notice">Reserved until {bookingRecord?.holdExpiresAt ? new Date(bookingRecord.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }) : '—'}</span><button className="primary" disabled={!paymentReady || bookingSubmitting} onClick={submitPaymentProof}>{bookingSubmitting ? 'Uploading securely…' : 'Submit payment proof'} <span>→</span></button></div>
         </>}
 
-        {checkoutStage === 'submitted' && <div className="status-result pending-result"><span className="result-icon">✓</span><span className="step-number">PAYMENT SUBMITTED — PENDING VERIFICATION</span><h4>Your payment proof is with the venue.</h4><p>The Owner or Admin can now open the receipt and confirm or reject this booking from the private portal. Use Track Booking to check for updates.</p><div className="tracking-number"><small>TRACKING NUMBER</small><strong>{trackingNumber}</strong><button onClick={() => navigator.clipboard?.writeText(trackingNumber)}>Copy</button></div><div className="confirmed-details"><span>Amount submitted<strong>₱{(bookingRecord?.totalAmount || total).toLocaleString()}</strong></span><span>Payment method<strong>GCash</strong></span><span>Status<strong>Pending verification</strong></span></div></div>}
+        {checkoutStage === 'submitted' && <div className="status-result pending-result"><span className="result-icon">✓</span><span className="step-number">PAYMENT SUBMITTED — PENDING VERIFICATION</span><h4>Your payment proof is with the venue.</h4><p>The Owner or Admin can now open the receipt and confirm or reject this booking from the private portal. Use Track Booking to check for updates.</p><div className="tracking-number"><small>TRACKING NUMBER</small><strong>{trackingNumber}</strong><button onClick={() => navigator.clipboard?.writeText(trackingNumber)}>Copy</button></div><div className="confirmed-details"><span>Amount submitted<strong>₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</strong></span><span>Payment method<strong>GCash</strong></span><span>Status<strong>Pending verification</strong></span></div></div>}
         </section>
         </div>}
       </>}
@@ -1001,7 +1013,7 @@ function TrackingPreview({ initialBooking = null }) {
           <h3>{statusCopy[booking.status] || booking.status}</h3>
           <p>{booking.customerName} · {booking.maskedEmail}</p>
           <div className="tracking-result-details"><span>Total<strong>₱{booking.totalAmount.toLocaleString()}</strong></span><span>Court-hours<strong>{booking.slots.length}</strong></span></div>
-          <p className="tracking-timestamps"><span>Booking created: <strong>{activityTimestamp(booking.createdAt)}</strong></span>{booking.payment?.submittedAt && <span>Proof submitted: <strong>{activityTimestamp(booking.payment.submittedAt)}</strong></span>}</p>
+          <p className="tracking-timestamps"><span>Booking created: <strong>{activityTimestamp(booking.createdAt)}</strong></span>{booking.payment?.submittedAt && <span>Proof submitted: <strong>{activityTimestamp(booking.payment.submittedAt)}</strong></span>}{booking.confirmedAt && <span>Booking confirmed: <strong>{activityTimestamp(booking.confirmedAt)}</strong></span>}</p>
           {booking.status === 'awaiting_payment' && <div className="continue-payment">
             <p>Upload payment before {new Date(booking.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })} to keep the reservation.</p>
             <img src="/gcash-qr-hd.png" alt="GCash QR code" />

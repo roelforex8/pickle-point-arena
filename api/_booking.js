@@ -5,7 +5,7 @@ export async function findPublicBooking(admin, method, value) {
 
   let query = admin
     .from('bookings')
-    .select('id, tracking_number, customer_name, customer_email, status, subtotal, booking_fee, total_amount, hold_expires_at, created_at, booking_slots(court_id, slot_start, slot_end, hourly_rate, status), payments(method, reference_number, status, submitted_at, receipt_path)')
+    .select('id, tracking_number, customer_name, customer_email, status, subtotal, booking_fee, total_amount, hold_expires_at, created_at, confirmed_at, booking_slots(court_id, slot_start, slot_end, hourly_rate, status), payments(method, reference_number, status, submitted_at, receipt_path)')
     .order('created_at', { ascending: false })
     .limit(1);
 
@@ -43,6 +43,7 @@ export function publicBookingPayload(booking) {
     totalAmount: Number(booking.total_amount),
     holdExpiresAt: booking.hold_expires_at,
     createdAt: booking.created_at,
+    confirmedAt: booking.confirmed_at,
     slots: (booking.booking_slots || []).map((slot) => ({
       courtId: slot.court_id,
       slotStart: slot.slot_start,
