@@ -1,0 +1,60 @@
+.customer-booking-summary { width: 100%; margin-top: 20px; color: white; }
+.customer-summary-header { position: relative; padding-right: 110px; }
+.customer-summary-header > div > small { color: var(--orange); font: 800 10px monospace; letter-spacing: .12em; }
+.customer-summary-header h3 { margin: 8px 0 5px; color: white; font-size: clamp(25px, 3vw, 38px); letter-spacing: -.035em; }
+.customer-summary-header p { margin: 0; color: #a5aea7; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.customer-summary-header > button { position: absolute; top: 0; right: 0; min-height: 38px; padding: 0 12px; border: 1px solid #434b45; border-radius: 3px; background: transparent; color: #dbe1dc; font-size: 11px; font-weight: 800; }
+.customer-summary-highlights { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.customer-summary-highlights > span { min-width: 0; padding: 15px; display: flex; flex-direction: column; gap: 5px; border: 1px solid #3b423d; color: #939c95; font-size: 10px; }
+.customer-summary-highlights strong { color: white; font-size: 23px; }
+.customer-status-progress { margin: 22px 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); list-style: none; }
+.customer-status-progress li { position: relative; display: grid; justify-items: center; gap: 8px; color: #737d75; font-size: 9px; text-align: center; }
+.customer-status-progress li::before { content: ''; position: absolute; z-index: 0; top: 14px; right: 50%; width: 100%; height: 2px; background: #343b36; }
+.customer-status-progress li:first-child::before { display: none; }
+.customer-status-progress li > span { position: relative; z-index: 1; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #495149; border-radius: 50%; background: var(--ink); color: #8b948d; font-size: 10px; font-weight: 900; }
+.customer-status-progress li.done, .customer-status-progress li.current { color: white; }
+.customer-status-progress li.done::before, .customer-status-progress li.current::before { background: var(--forest); }
+.customer-status-progress li.done > span { border-color: var(--forest); background: var(--forest); color: white; }
+.customer-status-progress li.current > span { border-color: var(--orange); background: var(--orange); color: white; box-shadow: 0 0 0 4px rgba(200,79,32,.12); }
+.customer-status-alert { margin: -7px 0 18px; padding: 10px 12px; border-left: 3px solid var(--orange); background: rgba(200,79,32,.1); color: #d4dad5; font-size: 11px; }
+.customer-summary-panel { padding: 22px; border: 1px solid #39413b; border-radius: 5px; background: #181c19; }
+.customer-summary-panel-heading small, .customer-summary-schedule > small, .customer-payment-total > small, .customer-summary-timestamps > small { color: var(--orange); font: 800 9px monospace; letter-spacing: .12em; }
+.customer-summary-panel-heading h4 { margin: 7px 0 20px; font-size: 23px; }
+.customer-summary-date + .customer-summary-date { margin-top: 20px; padding-top: 20px; border-top: 1px solid #353c37; }
+.customer-summary-info-row { min-width: 0; padding: 14px; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: start; gap: 11px; border: 1px solid #303732; border-radius: 3px; background: #1e231f; }
+.customer-summary-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 3px; background: #262d28; color: #d26a3d; font-size: 15px; font-weight: 900; }
+.customer-summary-info-row > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.customer-summary-info-row small { color: #929c94; font-size: 9px; font-weight: 800; letter-spacing: .05em; }
+.customer-summary-info-row strong { color: white; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.customer-summary-info-row > div > span { color: #9da69f; font-size: 11px; overflow-wrap: anywhere; }
+.customer-summary-schedule { margin-top: 15px; }
+.customer-summary-schedule > div { margin-top: 9px; display: grid; gap: 7px; }
+.customer-summary-court { min-width: 0; padding: 13px 14px; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 11px; border-left: 3px solid var(--orange); background: #202521; }
+.customer-summary-court > div { min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.customer-summary-court strong { color: white; font-size: 14px; }
+.customer-summary-court > div > span { color: #b3bbb5; font-size: 13px; font-weight: 800; line-height: 1.45; text-align: right; }
+.customer-summary-personal { margin-top: 20px; padding-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-top: 1px solid #353c37; }
+.customer-summary-location { grid-column: 1 / -1; }
+.customer-payment-total { margin-top: 20px; padding-top: 20px; display: flex; align-items: end; justify-content: space-between; gap: 20px; border-top: 1px solid #353c37; }
+.customer-payment-total strong { color: var(--orange); font-size: 21px; }
+.customer-summary-timestamps { margin-top: 20px; padding-top: 20px; display: grid; gap: 9px; border-top: 1px solid #353c37; }
+.customer-summary-timestamps > span { display: flex; justify-content: space-between; gap: 18px; color: #8f9991; font-size: 10px; }
+.customer-summary-timestamps strong { color: #dce2dd; font-size: 10px; text-align: right; }
+.customer-summary-action { margin-top: 18px; }
+
+@media (max-width: 640px) {
+  .customer-summary-header { padding-right: 0; }
+  .customer-summary-header > button { position: static; margin-top: 14px; }
+  .customer-summary-highlights { grid-template-columns: 1fr 1fr; }
+  .customer-status-progress { margin-right: -5px; margin-left: -5px; }
+  .customer-status-progress li { font-size: 8px; }
+  .customer-status-progress li > span { width: 27px; height: 27px; }
+  .customer-status-progress li::before { top: 13px; }
+  .customer-summary-panel { padding: 16px 12px; }
+  .customer-summary-court > div { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .customer-summary-court > div > span { text-align: left; }
+  .customer-summary-personal { grid-template-columns: 1fr; }
+  .customer-summary-location { grid-column: auto; }
+  .customer-summary-timestamps > span { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .customer-summary-timestamps strong { text-align: left; }
+}

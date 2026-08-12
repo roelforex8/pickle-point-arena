@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './supabase';
 import { groupBookingSlots } from './bookingSummary';
+import CustomerBookingSummary from './CustomerBookingSummary';
 
 const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
 const courtGalleryPhotos = [
@@ -969,15 +970,6 @@ function TrackingPreview({ initialBooking = null }) {
     setLookupMessage('');
   };
 
-  const statusCopy = {
-    awaiting_payment: 'Awaiting payment',
-    payment_submitted: 'Payment submitted — pending verification',
-    confirmed: 'Booking confirmed',
-    expired: 'Reservation expired',
-    rejected: 'Payment rejected',
-    cancelled: 'Booking cancelled by venue',
-  };
-
   return (
     <div className="tracking-card">
       <div className="tracking-copy">
@@ -995,12 +987,7 @@ function TrackingPreview({ initialBooking = null }) {
         {lookupMethod === 'email' ? <label>Booking email<input type="email" value={lookupValue} onChange={(event) => setLookupValue(event.target.value)} placeholder="you@email.com" autoComplete="email" required /></label> : <label>Tracking number<input value={lookupValue} onChange={(event) => setLookupValue(event.target.value)} placeholder="PPA-XXXXXXXXXXXX" autoComplete="off" required /></label>}
         <button className="primary full" disabled={lookupLoading}>{lookupLoading ? 'Checking…' : 'Check booking status'} <span>→</span></button>
         {lookupMessage && <p className="tracking-message" role="status">{lookupMessage}</p>}
-        {booking && <div className="tracking-result">
-          <small>{booking.trackingNumber}</small>
-          <h3>{statusCopy[booking.status] || booking.status}</h3>
-          <p>{booking.customerName} · {booking.maskedEmail}</p>
-          <div className="tracking-result-details"><span>Total<strong>₱{booking.totalAmount.toLocaleString()}</strong></span><span>Court-hours<strong>{booking.slots.length}</strong></span></div>
-          <p className="tracking-timestamps"><span>Booking created: <strong>{activityTimestamp(booking.createdAt)}</strong></span>{booking.payment?.submittedAt && <span>Proof submitted: <strong>{activityTimestamp(booking.payment.submittedAt)}</strong></span>}{booking.confirmedAt && <span>Booking confirmed: <strong>{activityTimestamp(booking.confirmedAt)}</strong></span>}</p>
+        {booking && <CustomerBookingSummary booking={booking} location="Guinoyuran Rd, Valencia City, Bukidnon, Philippines" onBack={() => { setBooking(null); setLookupMessage(''); }}>
           {booking.status === 'awaiting_payment' && <div className="continue-payment">
             <p>Upload payment before {new Date(booking.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })} to keep the reservation.</p>
             <img src="/gcash-qr-hd.png" alt="GCash QR code" />
@@ -1008,7 +995,7 @@ function TrackingPreview({ initialBooking = null }) {
             <label className="file-upload">Receipt or screenshot<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf" onChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setReceiptFile(file); setLookupMessage(''); } catch (error) { setReceiptFile(null); setLookupMessage(error.message); event.target.value = ''; } }} /><span>{receiptFile?.name || 'Choose an image or PDF (20 MB max)'}</span></label>
             <button type="button" className="primary full" disabled={proofSubmitting || !receiptFile} onClick={continuePayment}>{proofSubmitting ? 'Uploading…' : 'Submit payment proof'}</button>
           </div>}
-        </div>}
+        </CustomerBookingSummary>}
       </form>
     </div>
   );
