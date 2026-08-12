@@ -836,16 +836,32 @@ button { cursor: pointer; }
 .decision-status.confirmed { color: var(--forest); background: #e6eee8; }
 .decision-status.rejected { color: var(--orange); background: #f7e5dd; }
 .receipt-modal, .cancel-booking-modal, .admin-pin-modal { position: fixed; inset: 0; z-index: 100; padding: 24px; display: grid; place-items: center; background: rgba(10,14,11,.76); backdrop-filter: blur(4px); }
-.receipt-modal > div { width: min(900px, 96vw); max-height: 92vh; overflow: hidden; border-radius: 6px; background: white; box-shadow: 0 30px 80px rgba(0,0,0,.4); }
-.receipt-modal header { min-height: 78px; padding: 12px 17px; display: grid; grid-template-columns: 1fr minmax(280px, 2fr) 1fr; gap: 18px; align-items: center; border-bottom: 1px solid var(--line); }
+.receipt-modal > div { width: min(900px, 96vw); max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; border-radius: 6px; background: white; box-shadow: 0 30px 80px rgba(0,0,0,.4); }
+.receipt-modal header { position: relative; min-height: 64px; padding: 12px 64px 12px 17px; display: grid; grid-template-columns: 1fr; gap: 18px; align-items: center; border-bottom: 1px solid var(--line); }
 .receipt-modal header > div { display: flex; flex-direction: column; gap: 4px; }
-.receipt-modal header small { color: var(--orange); font-size: 8px; font-weight: 900; letter-spacing: .12em; }
-.receipt-modal header strong { font-size: 12px; }
-.receipt-modal header .receipt-check-summary { align-items: center; text-align: center; }
-.receipt-modal header .receipt-check-summary strong { color: var(--orange); font-size: 24px; line-height: 1; }
-.receipt-modal header .receipt-check-summary span { color: #626a63; font-size: 9px; font-weight: 700; line-height: 1.4; }
-.receipt-modal header button { width: 34px; height: 34px; justify-self: end; border: 1px solid var(--line); border-radius: 50%; background: white; font-size: 19px; }
-.receipt-modal img, .receipt-modal iframe { width: 100%; height: min(78vh, 820px); display: block; border: 0; object-fit: contain; background: #eef0ed; }
+.receipt-modal small { color: var(--orange); font-size: 10px; font-weight: 900; letter-spacing: .12em; }
+.receipt-modal header strong { font-size: 14px; overflow-wrap: anywhere; }
+.receipt-modal header button { position: absolute; top: 14px; right: 17px; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 50%; background: white; font-size: 19px; }
+.receipt-modal-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.receipt-check-summary { padding: 22px 20px 18px; display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center; }
+.receipt-check-summary strong { color: var(--orange); font-size: 30px; line-height: 1; }
+.receipt-booking-summary { margin: 0 20px 20px; padding: 20px; border: 1px solid var(--line); border-radius: 5px; background: #fafaf7; }
+.receipt-booking-summary h3 { margin: 0 0 16px; color: var(--forest); font-size: 15px; letter-spacing: .08em; }
+.receipt-date-group + .receipt-date-group { margin-top: 18px; padding-top: 18px; border-top: 2px solid #d9ded7; }
+.receipt-summary-row { display: flex; flex-direction: column; gap: 6px; }
+.receipt-date-row { margin-bottom: 12px; }
+.receipt-summary-row > strong { color: var(--ink); font-size: 15px; line-height: 1.35; }
+.receipt-court-list { display: grid; gap: 8px; }
+.receipt-court-range { min-width: 0; padding: 11px 12px; display: grid; grid-template-columns: minmax(72px, auto) 1fr auto; align-items: center; gap: 10px; border-left: 3px solid var(--orange); background: white; }
+.receipt-court-range strong { font-size: 14px; }
+.receipt-court-range span { min-width: 0; color: #515951; font-size: 14px; font-weight: 750; line-height: 1.4; }
+.receipt-court-range em { color: #858c85; font-size: 9px; font-style: normal; font-weight: 800; text-transform: uppercase; }
+.receipt-detail-grid { margin-top: 18px; padding-top: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; border-top: 1px solid var(--line); }
+.receipt-location-row { grid-column: 1 / -1; }
+.receipt-schedule-empty { margin: 0; color: #6d746d; font-size: 14px; }
+.receipt-proof { border-top: 1px solid var(--line); background: #eef0ed; }
+.receipt-proof > small { padding: 14px 20px; display: block; background: white; }
+.receipt-proof img, .receipt-proof iframe { width: 100%; height: min(65vh, 720px); display: block; border: 0; object-fit: contain; background: #eef0ed; }
 
 .owner-sales-report { margin: 10px 0; }
 .sales-report-heading { margin-bottom: 10px; padding: 22px 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border: 1px solid var(--line); border-radius: 4px; background: white; }
@@ -1185,10 +1201,16 @@ footer > div a:hover, footer > div a:focus-visible { color: white; text-decorati
   .review-list article { grid-template-columns: 1fr; }
   .review-actions { grid-column: auto; flex-wrap: wrap; }
   .receipt-modal { padding: 10px; }
-  .receipt-modal header { grid-template-columns: 1fr auto; gap: 10px; }
-  .receipt-modal header .receipt-check-summary { grid-column: 1 / -1; grid-row: 2; }
-  .receipt-modal header button { grid-column: 2; grid-row: 1; }
-  .receipt-modal img, .receipt-modal iframe { height: 70vh; }
+  .receipt-modal > div { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); }
+  .receipt-modal header { gap: 10px; }
+  .receipt-check-summary { padding: 18px 14px 16px; }
+  .receipt-check-summary strong { font-size: 28px; }
+  .receipt-booking-summary { margin: 0 10px 14px; padding: 16px 12px; }
+  .receipt-court-range { grid-template-columns: 1fr; gap: 3px; padding: 11px; }
+  .receipt-court-range em { margin-top: 3px; }
+  .receipt-detail-grid { grid-template-columns: 1fr; }
+  .receipt-location-row { grid-column: auto; }
+  .receipt-proof img, .receipt-proof iframe { height: 65vh; min-height: 360px; }
   .sales-report-heading { align-items: flex-start; flex-direction: column; }
   .sales-heading-actions { width: 100%; align-items: stretch; flex-direction: column; }
   .sales-heading-actions .period-toggle { align-self: flex-start; }

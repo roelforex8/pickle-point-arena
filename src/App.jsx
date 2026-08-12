@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './supabase';
+import { groupBookingSlots } from './bookingSummary';
 
 const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
 const courtGalleryPhotos = [
@@ -163,20 +164,6 @@ function philippineGreeting(date = new Date()) {
   if (hour < 12) return 'Good morning.';
   if (hour < 18) return 'Good afternoon.';
   return 'Good evening.';
-}
-
-function receiptScheduleSummary(slots = []) {
-  return [...slots]
-    .sort((first, second) => new Date(first.slot_start).getTime() - new Date(second.slot_start).getTime() || Number(first.court_id) - Number(second.court_id))
-    .map((slot) => {
-      const start = new Date(slot.slot_start);
-      const end = new Date(slot.slot_end);
-      const date = start.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' });
-      const startTime = start.toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' });
-      const endTime = end.toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' });
-      return `Court ${slot.court_id} · ${date}, ${startTime}–${endTime}`;
-    })
-    .join(' • ');
 }
 
 function validStaffPassword(password) {
@@ -1322,6 +1309,29 @@ function OperationsCalendar({ selectedDate, setSelectedDate, refreshKey, role, s
   </section>;
 }
 
+function ReceiptBookingSummary({ schedule = [], customerName, paymentMethod, paymentReference, status, location }) {
+  const statusLabel = String(status || '').replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
+
+  return <section className="receipt-booking-summary" aria-labelledby="receipt-booking-summary-title">
+    <h3 id="receipt-booking-summary-title">BOOKING SUMMARY</h3>
+    {schedule.length ? schedule.map((dateGroup) => <div className="receipt-date-group" key={dateGroup.dateKey}>
+      <div className="receipt-summary-row receipt-date-row"><small>DATE</small><strong>{dateGroup.dateLabel}</strong></div>
+      <div className="receipt-summary-row"><small>COURT SCHEDULE</small><div className="receipt-court-list">
+        {dateGroup.courts.flatMap((court) => court.ranges.map((range, index) => <div className="receipt-court-range" key={`${court.courtId}-${range.startTime}`}>
+          <strong>Court {court.courtId} —</strong><span>{range.startTime}–{range.endTime} ({range.durationLabel})</span>{index > 0 && <em>Additional time</em>}
+        </div>))}
+      </div></div>
+    </div>) : <p className="receipt-schedule-empty">Schedule unavailable</p>}
+    <div className="receipt-detail-grid">
+      {customerName && <div className="receipt-summary-row"><small>BOOKED BY</small><strong>{customerName}</strong></div>}
+      {paymentReference && <div className="receipt-summary-row"><small>PAYMENT REFERENCE</small><strong>{paymentReference}</strong></div>}
+      {paymentMethod && <div className="receipt-summary-row"><small>PAYMENT METHOD</small><strong>{paymentMethod}</strong></div>}
+      {status && <div className="receipt-summary-row"><small>BOOKING STATUS</small><strong>{statusLabel}</strong></div>}
+      {location && <div className="receipt-summary-row receipt-location-row"><small>LOCATION</small><strong>{location}</strong></div>}
+    </div>
+  </section>;
+}
+
 function PaymentReview({ session, refreshKey, onChanged, activityPanel }) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1398,7 +1408,7 @@ function PaymentReview({ session, refreshKey, onChanged, activityPanel }) {
       {!loading && pending.length === 0 ? <p className="review-empty">No payment proofs are waiting for verification.</p> : <div className="review-list">{pending.map((booking) => {
         const payment = Array.isArray(booking.payments) ? booking.payments[0] : booking.payments;
         const receiptExpired = !payment?.receipt_path && payment?.submitted_at && Date.now() - new Date(payment.submitted_at).getTime() >= 12 * 60 * 60 * 1000;
-        return <article key={booking.id}><div><small>{booking.tracking_number}</small><strong>{booking.customer_name}</strong><span>{booking.customer_email}</span><time dateTime={payment?.submitted_at}>Submitted {activityTimestamp(payment?.submitted_at)}</time></div><div><small>AMOUNT</small><strong>₱{Number(booking.total_amount).toLocaleString()}</strong><span>Ref: {payment?.reference_number || '—'}</span></div><div><small>SCHEDULE</small><strong>{booking.booking_slots?.length || 0} court-hour{booking.booking_slots?.length === 1 ? '' : 's'}</strong><span>{booking.booking_slots?.[0] ? new Date(booking.booking_slots[0].slot_start).toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', hour: 'numeric' }) : '—'}</span></div><div className="review-actions">{booking.receiptUrl && <button type="button" onClick={() => setReceiptPreview({ url: booking.receiptUrl, isPdf: payment?.receipt_path?.toLowerCase().endsWith('.pdf'), tracking: booking.tracking_number, amount: Number(booking.total_amount), schedule: receiptScheduleSummary(booking.booking_slots) })}>Open receipt</button>}{receiptExpired && <span className="receipt-expired">Receipt deleted after 12 hours</span>}<button className="reject" disabled={workingId === booking.id} onClick={() => review(booking.id, 'reject')}>Reject</button><button className="confirm" disabled={workingId === booking.id} onClick={() => review(booking.id, 'confirm')}>{workingId === booking.id ? 'Saving…' : 'Confirm'}</button></div></article>;
+        return <article key={booking.id}><div><small>{booking.tracking_number}</small><strong>{booking.customer_name}</strong><span>{booking.customer_email}</span><time dateTime={payment?.submitted_at}>Submitted {activityTimestamp(payment?.submitted_at)}</time></div><div><small>AMOUNT</small><strong>₱{Number(booking.total_amount).toLocaleString()}</strong><span>Ref: {payment?.reference_number || '—'}</span></div><div><small>SCHEDULE</small><strong>{booking.booking_slots?.length || 0} court-hour{booking.booking_slots?.length === 1 ? '' : 's'}</strong><span>{booking.booking_slots?.[0] ? new Date(booking.booking_slots[0].slot_start).toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', hour: 'numeric' }) : '—'}</span></div><div className="review-actions">{booking.receiptUrl && <button type="button" onClick={() => setReceiptPreview({ url: booking.receiptUrl, isPdf: payment?.receipt_path?.toLowerCase().endsWith('.pdf'), tracking: booking.tracking_number, amount: Number(booking.total_amount), schedule: groupBookingSlots(booking.booking_slots), customerName: booking.customer_name, paymentMethod: payment?.method, paymentReference: payment?.reference_number, status: booking.status })}>Open receipt</button>}{receiptExpired && <span className="receipt-expired">Receipt deleted after 12 hours</span>}<button className="reject" disabled={workingId === booking.id} onClick={() => review(booking.id, 'reject')}>Reject</button><button className="confirm" disabled={workingId === booking.id} onClick={() => review(booking.id, 'confirm')}>{workingId === booking.id ? 'Saving…' : 'Confirm'}</button></div></article>;
       })}</div>}
     </section>
     <div className="dashboard-priority-row">
@@ -1412,7 +1422,14 @@ function PaymentReview({ session, refreshKey, onChanged, activityPanel }) {
         return <article key={booking.id}><span className={`decision-status ${booking.status}`}>{booking.status === 'confirmed' ? 'Confirmed' : 'Rejected'}</span><div><strong>{booking.tracking_number} · {booking.customer_name}</strong><small>{activityTimestamp(payment?.reviewed_at)} · {relativeTime(payment?.reviewed_at)}{!undoExpired ? ` · ${remainingMinutes}m remaining` : ''}</small></div>{!undoExpired && !undoLimitReached && <button className="undo-decision" type="button" disabled={workingId === booking.id} onClick={() => review(booking.id, 'undo')}>Undo</button>}</article>;
       })}</div></section>
     </div>
-    {receiptPreview && <div className="receipt-modal" role="dialog" aria-modal="true" aria-label={`Receipt for ${receiptPreview.tracking}`} onClick={() => setReceiptPreview(null)}><div onClick={(event) => event.stopPropagation()}><header><div><small>PAYMENT RECEIPT</small><strong>{receiptPreview.tracking}</strong></div><div className="receipt-check-summary"><small>EXPECTED PAYMENT</small><strong>₱{Number(receiptPreview.amount || 0).toLocaleString()}</strong><span>{receiptPreview.schedule || 'Schedule unavailable'}</span></div><button type="button" onClick={() => setReceiptPreview(null)} aria-label="Close receipt">×</button></header>{receiptPreview.isPdf ? <iframe src={receiptPreview.url} title={`Receipt ${receiptPreview.tracking}`} /> : <img src={receiptPreview.url} alt={`Payment receipt for ${receiptPreview.tracking}`} />}</div></div>}
+    {receiptPreview && <div className="receipt-modal" role="dialog" aria-modal="true" aria-label={`Receipt for ${receiptPreview.tracking}`} onClick={() => setReceiptPreview(null)}><div onClick={(event) => event.stopPropagation()}>
+      <header><div className="receipt-reference"><small>PAYMENT RECEIPT</small><strong>{receiptPreview.tracking}</strong></div><button type="button" onClick={() => setReceiptPreview(null)} aria-label="Close receipt">×</button></header>
+      <div className="receipt-modal-scroll">
+        <div className="receipt-check-summary"><small>EXPECTED PAYMENT</small><strong>₱{Number(receiptPreview.amount || 0).toLocaleString()}</strong></div>
+        <ReceiptBookingSummary {...receiptPreview} />
+        <div className="receipt-proof"><small>PAYMENT PROOF</small>{receiptPreview.isPdf ? <iframe src={receiptPreview.url} title={`Receipt ${receiptPreview.tracking}`} /> : <img src={receiptPreview.url} alt={`Payment receipt for ${receiptPreview.tracking}`} />}</div>
+      </div>
+    </div></div>}
   </>;
 }
 
