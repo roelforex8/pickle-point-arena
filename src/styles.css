@@ -552,8 +552,16 @@ button { cursor: pointer; }
 .owner-account .team-panel-content > label + label { margin-top: 11px; }
 .owner-account input, .admin-manager input { width: 100%; min-height: 44px; padding: 0 11px; border: 1px solid #d7dcd7; border-radius: 3px; background: #fbfcfa; color: var(--ink); outline: none; }
 .owner-account input:focus, .admin-manager input:focus { border-color: var(--orange); }
+.password-visibility-field { position: relative; display: block; width: 100%; }
+.password-visibility-field > input { width: 100%; padding-right: 50px !important; }
+.password-visibility-toggle { position: absolute; top: 1px; right: 1px; bottom: 1px; width: 44px; min-width: 44px; min-height: 40px; display: grid; place-items: center; padding: 0; border: 0; border-left: 1px solid rgba(55,87,70,.16); border-radius: 0 3px 3px 0; background: #f7f4ed; color: var(--forest); cursor: pointer; }
+.password-visibility-toggle:hover { background: #f7e5dd; color: var(--orange); }
+.password-visibility-toggle:focus-visible { z-index: 1; outline: 3px solid var(--orange); outline-offset: 2px; }
+.password-visibility-toggle[aria-pressed="true"] { background: var(--forest); color: white; }
+.password-visibility-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.password-eye-slash { stroke-width: 2.2; }
 .password-row { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 8px; margin-top: 12px; }
-.password-row button, .password-input button { min-height: 44px; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--forest); padding: 0 12px; font-size: 9px; font-weight: 900; }
+.password-row button, .password-input > button { min-height: 44px; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--forest); padding: 0 12px; font-size: 9px; font-weight: 900; }
 .account-action { width: 100%; min-height: 44px; margin-top: 14px; border: 0; border-radius: 3px; background: var(--forest); color: white; font-size: 10px; font-weight: 900; }
 .account-action:disabled, .add-admin-button:disabled { cursor: wait; opacity: .65; }
 .owner-account .team-panel-content > p, .admin-note { color: #858c85; font-size: 9px; line-height: 1.5; margin: 16px 0 0; }
@@ -598,7 +606,7 @@ button { cursor: pointer; }
 .admin-password-reset > div { display: flex; flex-direction: column; gap: 4px; }
 .admin-password-reset > div small { color: var(--orange); font: 700 8px monospace; letter-spacing: .1em; }
 .admin-password-reset > div strong { font-size: 11px; }
-.admin-password-reset .password-input button { min-height: 44px; margin: 0; padding: 0 10px; border: 1px solid var(--line); border-left: 0; border-radius: 0 3px 3px 0; background: white; color: var(--forest); }
+.admin-password-reset .password-input > button { min-height: 44px; margin: 0; padding: 0 10px; border: 1px solid var(--line); border-left: 0; border-radius: 0 3px 3px 0; background: white; color: var(--forest); }
 .admin-password-reset .save-admin-password { min-height: 44px; margin: 0; padding: 0 12px; border-radius: 3px; background: var(--orange); color: white; white-space: nowrap; }
 .admin-password-reset .save-admin-password:disabled { cursor: not-allowed; opacity: .45; }
 .admin-password-reset > p { color: var(--forest); font-weight: 800; }
