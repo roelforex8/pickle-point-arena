@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import { groupBookingSlots } from './bookingSummary';
 import CustomerBookingSummary from './CustomerBookingSummary';
 import PasswordInput from './PasswordInput';
+import { administratorRemovalConfirmation, administratorStatusLabel, canConfirmAdministratorRemoval } from './adminManagement';
 import { detectReceiptMimeType, formatReceiptFileSize, isFacebookInAppBrowser, receiptFileAccept, validateReceiptFile } from './receiptUpload';
 import { changeOwnerPassword } from './ownerPassword';
 
@@ -1585,11 +1586,17 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
   const [blockHoverDate, setBlockHoverDate] = useState(null);
   const [blockCalendarMonth, setBlockCalendarMonth] = useState(() => new Date(`${selectedDate}T12:00:00`));
   const [admins, setAdmins] = useState([]);
+  const [removedAdmins, setRemovedAdmins] = useState([]);
   const [adminName, setAdminName] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminMessage, setAdminMessage] = useState('');
   const [adminSubmitting, setAdminSubmitting] = useState(false);
+  const [adminActionId, setAdminActionId] = useState('');
+  const [adminRemoveTarget, setAdminRemoveTarget] = useState(null);
+  const [adminRemoveConfirmation, setAdminRemoveConfirmation] = useState('');
+  const [adminRemoveSubmitting, setAdminRemoveSubmitting] = useState(false);
+  const [adminRemoveMessage, setAdminRemoveMessage] = useState('');
   const [ownerAccountOpen, setOwnerAccountOpen] = useState(false);
   const [adminManagerOpen, setAdminManagerOpen] = useState(false);
   const [expandedAdminId, setExpandedAdminId] = useState('');
@@ -1624,7 +1631,10 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
     if (role !== 'owner' || !session?.access_token) return;
     const response = await authorizedFetch('/api/admins');
     const result = await response.json();
-    if (response.ok) setAdmins(result.admins || []);
+    if (response.ok) {
+      setAdmins(result.admins || []);
+      setRemovedAdmins(result.removedAdmins || []);
+    }
     else setAdminMessage(result.error || 'Administrators could not be loaded.');
   };
 
@@ -1846,11 +1856,58 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
     setAdminSubmitting(false);
   };
 
-  const deactivateAdmin = async (id) => {
-    const response = await authorizedFetch('/api/admins', { method: 'DELETE', body: JSON.stringify({ id }) });
-    const result = await response.json();
-    setAdminMessage(response.ok ? 'Administrator access disabled.' : (result.error || 'Access could not be disabled.'));
-    if (response.ok) await loadAdmins();
+  const updateAdminAccess = async (id, action) => {
+    if (adminActionId) return;
+    setAdminMessage('');
+    setAdminActionId(id);
+    try {
+      const response = await authorizedFetch('/api/admins', { method: 'PATCH', body: JSON.stringify({ id, action }) });
+      const result = await response.json();
+      if (!response.ok) return setAdminMessage(result.error || 'Administrator access could not be updated.');
+      setAdminMessage(action === 'disable' ? 'Administrator access disabled.' : 'Administrator access reactivated.');
+      await loadAdmins();
+    } catch {
+      setAdminMessage('Administrator access could not be updated. Check your connection and try again.');
+    } finally {
+      setAdminActionId('');
+    }
+  };
+
+  const openAdminRemoval = (admin) => {
+    setAdminRemoveTarget(admin);
+    setAdminRemoveConfirmation('');
+    setAdminRemoveMessage('');
+  };
+
+  const closeAdminRemoval = () => {
+    if (adminRemoveSubmitting) return;
+    setAdminRemoveTarget(null);
+    setAdminRemoveConfirmation('');
+    setAdminRemoveMessage('');
+  };
+
+  const removeAdmin = async (event) => {
+    event.preventDefault();
+    if (!adminRemoveTarget || !canConfirmAdministratorRemoval(adminRemoveConfirmation, adminRemoveSubmitting)) return;
+    setAdminRemoveSubmitting(true);
+    setAdminRemoveMessage('');
+    try {
+      const response = await authorizedFetch('/api/admins', {
+        method: 'DELETE',
+        body: JSON.stringify({ id: adminRemoveTarget.id, confirmation: adminRemoveConfirmation }),
+      });
+      const result = await response.json();
+      if (!response.ok) return setAdminRemoveMessage(result.error || 'The administrator could not be removed.');
+      setAdminRemoveTarget(null);
+      setAdminRemoveConfirmation('');
+      setExpandedAdminId('');
+      setAdminMessage('Administrator removed. Login access is revoked and historical activity is preserved.');
+      await loadAdmins();
+    } catch {
+      setAdminRemoveMessage('The administrator could not be removed. Check your connection and try again.');
+    } finally {
+      setAdminRemoveSubmitting(false);
+    }
   };
 
   const requestAdminDetails = (admin) => {
@@ -2038,16 +2095,21 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
               const expanded = expandedAdminId === admin.id;
               const temporaryPassword = sessionAdminPasswords[admin.id];
               return <div className={`admin-entry ${expanded ? 'expanded' : ''}`} key={admin.id}>
-                <button className="admin-summary" type="button" aria-expanded={expanded} onClick={() => requestAdminDetails(admin)}><span className="admin-avatar">{(admin.full_name || 'A').slice(0, 1).toUpperCase()}</span><span><strong>{admin.full_name || 'Administrator'}</strong><small>{admin.email} · {admin.active ? 'Active' : 'Access disabled'}</small></span><b>{expanded ? '−' : '+'}</b></button>
-                {admin.active && <button className="disable-admin" type="button" onClick={() => deactivateAdmin(admin.id)}>Disable</button>}
-                {expanded && <div className="admin-credentials"><div className="admin-detail-grid"><span><small>FULL NAME</small><strong>{admin.full_name || 'Administrator'}</strong></span><span><small>EMAIL ADDRESS</small><strong>{admin.email}</strong></span><span><small>STATUS</small><strong>{admin.active ? 'Active' : 'Access disabled'}</strong></span><span><small>CREATED</small><strong>{activityTimestamp(admin.created_at)}</strong></span></div><div className="admin-password-detail"><small>CURRENTLY VISIBLE PASSWORD</small>{temporaryPassword ? <><code>{temporaryPassword}</code><button type="button" onClick={() => navigator.clipboard?.writeText(temporaryPassword)}>Copy</button></> : <p>The old password is irreversibly hashed. Set a new password below to make the replacement visible.</p>}</div><div className="admin-password-reset"><div><small>CHANGE ADMINISTRATOR PASSWORD</small><strong>Set or generate a new visible password</strong></div><label>New password<span className="password-input"><PasswordInput value={adminNewPassword} onChange={(event) => setAdminNewPassword(event.target.value)} placeholder="New temporary password" autoComplete="new-password" /><button type="button" onClick={generateAdminResetPassword}>Generate</button></span></label><label>Owner PIN<PasswordInput inputMode="numeric" pattern="[0-9]{4}" maxLength="4" value={adminPasswordOwnerPin} onChange={(event) => setAdminPasswordOwnerPin(event.target.value.replace(/\D/g, '').slice(0, 4))} autoComplete="off" /></label><button className="save-admin-password" type="button" disabled={adminPasswordChangeSubmitting || !adminNewPassword || adminPasswordOwnerPin.length !== 4} onClick={() => changeAdminPassword(admin.id)}>{adminPasswordChangeSubmitting ? 'Changing…' : 'Change password'}</button>{adminPasswordChangeMessage && <p>{adminPasswordChangeMessage}</p>}<em>The new password remains visible only until this page is closed. If it is forgotten later, set another replacement.</em></div></div>}
+                <button className="admin-summary" type="button" aria-expanded={expanded} onClick={() => requestAdminDetails(admin)}><span className="admin-avatar">{(admin.full_name || 'A').slice(0, 1).toUpperCase()}</span><span><strong>{admin.full_name || 'Administrator'}</strong><small>{admin.email} · {administratorStatusLabel(admin.status)}</small></span><b>{expanded ? '−' : '+'}</b></button>
+                <div className="admin-actions">
+                  {admin.status === 'active' ? <button className="disable-admin" type="button" disabled={adminActionId === admin.id} onClick={() => updateAdminAccess(admin.id, 'disable')}>{adminActionId === admin.id ? 'Disabling…' : 'Disable access'}</button> : <button className="reactivate-admin" type="button" disabled={adminActionId === admin.id} onClick={() => updateAdminAccess(admin.id, 'reactivate')}>{adminActionId === admin.id ? 'Reactivating…' : 'Reactivate access'}</button>}
+                  <button className="remove-admin" type="button" onClick={() => openAdminRemoval(admin)}>Remove administrator</button>
+                </div>
+                {expanded && <div className="admin-credentials"><div className="admin-detail-grid"><span><small>FULL NAME</small><strong>{admin.full_name || 'Administrator'}</strong></span><span><small>EMAIL ADDRESS</small><strong>{admin.email}</strong></span><span><small>STATUS</small><strong>{administratorStatusLabel(admin.status)}</strong></span><span><small>CREATED</small><strong>{activityTimestamp(admin.created_at)}</strong></span></div><div className="admin-password-detail"><small>CURRENTLY VISIBLE PASSWORD</small>{temporaryPassword ? <><code>{temporaryPassword}</code><button type="button" onClick={() => navigator.clipboard?.writeText(temporaryPassword)}>Copy</button></> : <p>The old password is irreversibly hashed. Set a new password below to make the replacement visible.</p>}</div><div className="admin-password-reset"><div><small>CHANGE ADMINISTRATOR PASSWORD</small><strong>Set or generate a new visible password</strong></div><label>New password<span className="password-input"><PasswordInput value={adminNewPassword} onChange={(event) => setAdminNewPassword(event.target.value)} placeholder="New temporary password" autoComplete="new-password" /><button type="button" onClick={generateAdminResetPassword}>Generate</button></span></label><label>Owner PIN<PasswordInput inputMode="numeric" pattern="[0-9]{4}" maxLength="4" value={adminPasswordOwnerPin} onChange={(event) => setAdminPasswordOwnerPin(event.target.value.replace(/\D/g, '').slice(0, 4))} autoComplete="off" /></label><button className="save-admin-password" type="button" disabled={adminPasswordChangeSubmitting || !adminNewPassword || adminPasswordOwnerPin.length !== 4} onClick={() => changeAdminPassword(admin.id)}>{adminPasswordChangeSubmitting ? 'Changing…' : 'Change password'}</button>{adminPasswordChangeMessage && <p>{adminPasswordChangeMessage}</p>}<em>The new password remains visible only until this page is closed. If it is forgotten later, set another replacement.</em></div></div>}
               </div>;
             })}</div>
+            {removedAdmins.length > 0 && <details className="removed-admins"><summary>Removed administrators ({removedAdmins.length})</summary><div>{removedAdmins.map((admin) => <div className="removed-admin-entry" key={admin.id}><span><strong>{admin.full_name || 'Administrator'}</strong><small>{admin.email}</small></span><b>Login revoked · history preserved</b></div>)}</div></details>}
           </div>}
         </form>
       </section>
 
       {adminPinTarget && <div className="admin-pin-modal" role="dialog" aria-modal="true" aria-label="Verify Owner PIN" onClick={() => setAdminPinTarget(null)}><form onSubmit={verifyAdminDetailsPin} onClick={(event) => event.stopPropagation()}><button className="modal-close" type="button" onClick={() => setAdminPinTarget(null)}>×</button><small>OWNER VERIFICATION</small><h3>Open administrator details?</h3><p>Enter the four-digit Owner PIN to view {adminPinTarget.full_name || 'this administrator'}&apos;s protected account information.</p><label>Owner PIN<PasswordInput inputMode="numeric" pattern="[0-9]{4}" maxLength="4" value={adminAccessPin} onChange={(event) => setAdminAccessPin(event.target.value.replace(/\D/g, '').slice(0, 4))} autoComplete="off" autoFocus /></label>{adminAccessMessage && <p className="admin-pin-error">{adminAccessMessage}</p>}<button className="verify-admin-pin" type="submit" disabled={adminAccessSubmitting || adminAccessPin.length !== 4}>{adminAccessSubmitting ? 'Verifying…' : 'Verify and open'}</button></form></div>}
+      {adminRemoveTarget && <div className="admin-remove-modal" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeAdminRemoval(); }}><form role="dialog" aria-modal="true" aria-labelledby="admin-remove-title" onSubmit={removeAdmin}><button className="modal-close" type="button" aria-label="Close removal confirmation" onClick={closeAdminRemoval}>×</button><small>OWNER ONLY · DESTRUCTIVE ACTION</small><h3 id="admin-remove-title">Remove administrator?</h3><p>This permanently revokes login access and removes the account from the active administrator list. Historical activity and attribution will be preserved.</p><div className="admin-remove-identity"><strong>{adminRemoveTarget.full_name || 'Administrator'}</strong><span>{adminRemoveTarget.email}</span></div><label>Type <code>{administratorRemovalConfirmation}</code> to confirm<input value={adminRemoveConfirmation} onChange={(event) => setAdminRemoveConfirmation(event.target.value)} autoComplete="off" disabled={adminRemoveSubmitting} autoFocus /></label>{adminRemoveMessage && <p className="admin-remove-error" role="alert">{adminRemoveMessage}</p>}<div className="admin-remove-buttons"><button type="button" onClick={closeAdminRemoval} disabled={adminRemoveSubmitting}>Cancel</button><button className="confirm-remove-admin" type="submit" disabled={!canConfirmAdministratorRemoval(adminRemoveConfirmation, adminRemoveSubmitting)}>{adminRemoveSubmitting ? 'Removing…' : 'Remove administrator'}</button></div></form></div>}
       </section>}
       </div>
     </div>

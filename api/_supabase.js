@@ -11,6 +11,16 @@ export function getAdminClient() {
   });
 }
 
+export function authorizeStaffProfile(profile, requiredRole) {
+  if (!profile?.active || !['owner', 'admin'].includes(profile.role)) {
+    return { error: 'This account is not authorized.', status: 403 };
+  }
+  if (requiredRole && profile.role !== requiredRole) {
+    return { error: 'Owner access is required.', status: 403 };
+  }
+  return null;
+}
+
 export async function requireStaff(request, requiredRole) {
   const token = request.headers.authorization?.replace(/^Bearer\s+/i, '');
   if (!token) return { error: 'Authentication required.', status: 401 };
@@ -29,12 +39,9 @@ export async function requireStaff(request, requiredRole) {
     .eq('id', userData.user.id)
     .single();
 
-  if (profileError || !profile?.active || !['owner', 'admin'].includes(profile.role)) {
-    return { error: 'This account is not authorized.', status: 403 };
-  }
-  if (requiredRole && profile.role !== requiredRole) {
-    return { error: 'Owner access is required.', status: 403 };
-  }
+  if (profileError) return { error: 'This account is not authorized.', status: 403 };
+  const authorizationError = authorizeStaffProfile(profile, requiredRole);
+  if (authorizationError) return authorizationError;
 
   const admin = getAdminClient();
   return { admin, userClient, user: userData.user, profile };
