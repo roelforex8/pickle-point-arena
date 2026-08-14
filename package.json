@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test --test-isolation=none src/*.test.js",
+    "test": "node --test --test-isolation=none src/*.test.js api/*.test.js",
     "build": "vite build",
     "preview": "vite preview"
   },

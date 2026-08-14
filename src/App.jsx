@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from './supabase';
 import { groupBookingSlots } from './bookingSummary';
 import CustomerBookingSummary from './CustomerBookingSummary';
+import { detectReceiptMimeType, formatReceiptFileSize, isFacebookInAppBrowser, receiptFileAccept, validateReceiptFile } from './receiptUpload';
 
 const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
 const courtGalleryPhotos = [
@@ -174,27 +175,22 @@ function validStaffPassword(password) {
 
 const passwordRequirements = 'Use at least 5 letters, including 1 capital letter, plus 1 number and 1 special character.';
 
-const maxReceiptBytes = 20 * 1024 * 1024;
-const receiptMimeByExtension = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  webp: 'image/webp',
-  heic: 'image/heic',
-  heif: 'image/heif',
-  pdf: 'application/pdf',
-};
 const storageReceiptMimeTypes = new Set(['image/jpeg', 'image/png', 'application/pdf']);
 
-function validateReceiptFile(file) {
-  if (!file) throw new Error('Choose a receipt image or PDF first.');
-  const extension = file.name.split('.').pop()?.toLowerCase() || '';
-  const allowed = new Set(Object.values(receiptMimeByExtension));
-  const reportedMimeType = file.type?.toLowerCase() || '';
-  const mimeType = allowed.has(reportedMimeType) ? reportedMimeType : (receiptMimeByExtension[extension] || reportedMimeType);
-  if (!allowed.has(mimeType)) throw new Error('Choose a JPG, PNG, WebP, HEIC, HEIF, or PDF receipt.');
-  if (!file.size || file.size > maxReceiptBytes) throw new Error('Choose a non-empty receipt file no larger than 20 MB.');
-  return mimeType;
+function ReceiptFilePicker({ id, file, onFileChange }) {
+  const showInAppBrowserHelp = isFacebookInAppBrowser(typeof navigator === 'undefined' ? '' : navigator.userAgent);
+  return <>
+    <label className={`file-upload${file ? ' has-file' : ''}`} htmlFor={id}>
+      <span className="file-upload-label">Receipt or screenshot</span>
+      <input id={id} type="file" accept={receiptFileAccept} onChange={onFileChange} aria-describedby={`${id}-status ${id}-help`} />
+      <span className="file-upload-surface">
+        <strong>{file ? 'File selected' : 'Choose an image or PDF (20 MB max)'}</strong>
+        <small id={`${id}-status`}>{file ? `${file.name} · ${formatReceiptFileSize(file.size)}` : 'No file selected'}</small>
+      </span>
+    </label>
+    <p className="file-upload-help" id={`${id}-help`}>Save your receipt to Photos or Files first, then choose it here.</p>
+    {showInAppBrowserHelp && <p className="in-app-browser-help" role="note">Having trouble choosing a file? Open this page in Safari or Chrome.</p>}
+  </>;
 }
 
 async function convertReceiptImageToJpeg(file) {
@@ -224,7 +220,8 @@ async function convertReceiptImageToJpeg(file) {
 }
 
 async function prepareReceiptUpload(file) {
-  const mimeType = validateReceiptFile(file);
+  validateReceiptFile(file);
+  const mimeType = await detectReceiptMimeType(file);
   if (storageReceiptMimeTypes.has(mimeType)) return { file, mimeType };
   const convertedFile = await convertReceiptImageToJpeg(file);
   validateReceiptFile(convertedFile);
@@ -233,23 +230,43 @@ async function prepareReceiptUpload(file) {
 
 async function uploadPaymentProof({ lookupMethod, lookupValue, referenceNumber, file }) {
   const preparedUpload = await prepareReceiptUpload(file);
-  const prepareResponse = await fetch('/api/payments', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lookupMethod, lookupValue, mimeType: preparedUpload.mimeType, fileSize: preparedUpload.file.size }),
-  });
-  const prepared = await prepareResponse.json();
+  let prepareResponse;
+  try {
+    prepareResponse = await fetch('/api/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lookupMethod, lookupValue, mimeType: preparedUpload.mimeType, fileSize: preparedUpload.file.size }),
+    });
+  } catch {
+    throw new Error('The upload service could not be reached. Check your connection and try again.');
+  }
+  let prepared;
+  try {
+    prepared = await prepareResponse.json();
+  } catch {
+    throw new Error('The upload service returned an unexpected response. Please try again.');
+  }
   if (!prepareResponse.ok) throw new Error(prepared.error || 'The receipt upload could not be prepared.');
 
   const { error: uploadError } = await supabase.storage.from('payment-receipts').uploadToSignedUrl(prepared.path, prepared.token, preparedUpload.file, { contentType: preparedUpload.mimeType });
-  if (uploadError) throw new Error(`Receipt upload failed: ${uploadError.message}`);
+  if (uploadError) throw new Error('The receipt upload could not be completed. Check your connection and try again.');
 
-  const finalizeResponse = await fetch('/api/payments', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lookupMethod, lookupValue, referenceNumber, receiptPath: prepared.path }),
-  });
-  const finalized = await finalizeResponse.json();
+  let finalizeResponse;
+  try {
+    finalizeResponse = await fetch('/api/payments', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lookupMethod, lookupValue, referenceNumber, receiptPath: prepared.path }),
+    });
+  } catch {
+    throw new Error('The upload could not be finalized. Check your connection and try again.');
+  }
+  let finalized;
+  try {
+    finalized = await finalizeResponse.json();
+  } catch {
+    throw new Error('The upload service returned an unexpected response. Please try again.');
+  }
   if (!finalizeResponse.ok) throw new Error(finalized.error || 'The payment proof could not be submitted.');
   return finalized.booking;
 }
@@ -802,7 +819,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
           </div>
           <div className="payment-stage">
             <div className="payment-choice"><span className="step-number">02</span><h4>Payment method</h4><div className="payment-tabs"><button className="active"><strong>GCash</strong><small>Available now</small></button><button disabled><strong>Maya</strong><small>Coming soon</small></button><button disabled><strong>Metrobank</strong><small>Coming soon</small></button></div><div className="qr-payment"><div className="qr-frame"><img src="/gcash-qr-hd.png" alt="High-resolution GCash QR code for Pickle Point Arena payment" /></div><div><span className="gcash-label">GCASH PAYMENT</span><h4>Scan and pay ₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</h4><p>Enter the exact amount shown. Transfer fees may apply.</p><a href="/gcash-qr-hd.png" download="Pickle-Point-Arena-GCash-QR.png">↓ Download GCash QR</a></div></div></div>
-            <div className="proof-form"><span className="step-number">03</span><h4>Submit payment proof</h4><label>Reference number<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="(optional)" /></label><label className="file-upload">Receipt or screenshot<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf" onChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setProofFile(file); setCheckoutMessage(''); } catch (error) { setProofFile(null); setCheckoutMessage(error.message); event.target.value = ''; } }} /><span>{proofFile?.name || 'Choose an image or PDF (20 MB max)'}</span></label>{checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}<p>HEIC, HEIF, and WebP phone images are converted securely to JPEG before upload. The receipt is stored privately for Owner/Admin review.</p><div className="payment-summary"><span>Customer</span><strong>{customerName}</strong><span>Tracking</span><strong>{trackingNumber}</strong><span>Amount</span><strong>₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</strong></div></div>
+            <div className="proof-form"><span className="step-number">03</span><h4>Submit payment proof</h4><label>Reference number<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="(optional)" /></label><ReceiptFilePicker id="checkout-receipt-file" file={proofFile} onFileChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setProofFile(file); setCheckoutMessage(''); } catch (error) { setProofFile(null); setCheckoutMessage(error.message); event.target.value = ''; } }} />{checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}<p>HEIC, HEIF, and WebP phone images are converted securely to JPEG before upload. The receipt is stored privately for Owner/Admin review.</p><div className="payment-summary"><span>Customer</span><strong>{customerName}</strong><span>Tracking</span><strong>{trackingNumber}</strong><span>Amount</span><strong>₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</strong></div></div>
           </div>
           <div className="checkout-footer"><span className="hold-notice">Reserved until {bookingRecord?.holdExpiresAt ? new Date(bookingRecord.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }) : '—'}</span><button className="primary" disabled={!paymentReady || bookingSubmitting} onClick={submitPaymentProof}>{bookingSubmitting ? 'Uploading securely…' : 'Submit payment proof'} <span>→</span></button></div>
         </>}
@@ -942,11 +959,16 @@ function TrackingPreview({ initialBooking = null }) {
     setLookupLoading(true);
     setLookupMessage('');
     setBooking(null);
-    const response = await fetch('/api/lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ method: lookupMethod, value: lookupValue }) });
-    const result = await response.json();
-    if (response.ok) setBooking(result.booking);
-    else setLookupMessage(result.error || 'The booking could not be found.');
-    setLookupLoading(false);
+    try {
+      const response = await fetch('/api/lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ method: lookupMethod, value: lookupValue }) });
+      const result = await response.json();
+      if (response.ok) setBooking(result.booking);
+      else setLookupMessage(result.error || 'The booking could not be found.');
+    } catch {
+      setLookupMessage('The booking service could not be reached. Check your connection and try again.');
+    } finally {
+      setLookupLoading(false);
+    }
   };
 
   const continuePayment = async () => {
@@ -992,7 +1014,7 @@ function TrackingPreview({ initialBooking = null }) {
             <p>Upload payment before {new Date(booking.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })} to keep the reservation.</p>
             <img src="/gcash-qr-hd.png" alt="GCash QR code" />
             <label>GCash reference number<input value={referenceNumber} onChange={(event) => setReferenceNumber(event.target.value)} placeholder="(optional)" /></label>
-            <label className="file-upload">Receipt or screenshot<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf" onChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setReceiptFile(file); setLookupMessage(''); } catch (error) { setReceiptFile(null); setLookupMessage(error.message); event.target.value = ''; } }} /><span>{receiptFile?.name || 'Choose an image or PDF (20 MB max)'}</span></label>
+            <ReceiptFilePicker id="tracking-receipt-file" file={receiptFile} onFileChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setReceiptFile(file); setLookupMessage(''); } catch (error) { setReceiptFile(null); setLookupMessage(error.message); event.target.value = ''; } }} />
             <button type="button" className="primary full" disabled={proofSubmitting || !receiptFile} onClick={continuePayment}>{proofSubmitting ? 'Uploading…' : 'Submit payment proof'}</button>
           </div>}
         </CustomerBookingSummary>}

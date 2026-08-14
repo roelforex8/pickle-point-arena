@@ -315,9 +315,16 @@ button { cursor: pointer; }
 .proof-form label { display: flex; flex-direction: column; gap: 7px; margin-bottom: 14px; color: #687068; font-size: 9px; font-weight: 800; }
 .proof-form input { min-height: 46px; padding: 0 11px; border: 1px solid #d9ded9; border-radius: 3px; background: white; outline: 0; }
 .proof-form input:focus { border-color: var(--orange); }
-.file-upload { position: relative; }
-.file-upload input { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-.file-upload > span { min-height: 76px; padding: 12px; display: grid; place-items: center; border: 1px dashed #bfc7bf; border-radius: 4px; background: white; color: var(--forest); text-align: center; cursor: pointer; }
+.file-upload { position: relative; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.file-upload input { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; pointer-events: auto; }
+.file-upload-label { display: block; }
+.file-upload-surface { min-height: 76px; padding: 12px; display: grid; place-items: center; gap: 5px; border: 1px dashed #bfc7bf; border-radius: 4px; background: white; color: var(--forest); text-align: center; cursor: pointer; }
+.file-upload-surface strong { font-size: 10px; }
+.file-upload-surface small { max-width: 100%; color: #727b74; font-size: 9px; font-weight: 700; overflow-wrap: anywhere; }
+.file-upload.has-file .file-upload-surface { border-style: solid; border-color: #7c9c84; background: #f1f7ef; }
+.file-upload:focus-within .file-upload-surface { outline: 3px solid rgba(200,79,32,.28); outline-offset: 2px; border-color: var(--orange); }
+.file-upload-help, .in-app-browser-help { margin: -6px 0 14px; color: #777f78; font-size: 9px; line-height: 1.5; }
+.in-app-browser-help { padding: 9px 10px; border: 1px solid #e2b06d; border-radius: 4px; background: #fff5df; color: #704812; font-weight: 800; }
 .proof-form > p { color: #898f89; font-size: 9px; line-height: 1.5; }
 .proof-form > .checkout-message { margin: 0 0 14px; padding: 11px 12px; border: 1px solid #e0a28d; border-radius: 4px; background: #fff0ea; color: #8f3217; font-size: 10px; font-weight: 800; }
 .payment-summary { margin-top: 18px; padding-top: 16px; display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; border-top: 1px solid var(--line); }
@@ -789,9 +796,14 @@ button { cursor: pointer; }
 .continue-payment > p { color: #f0c3ae; font-size: 9px; line-height: 1.45; }
 .continue-payment > img { width: 150px; max-height: 150px; margin: 8px auto; display: block; object-fit: cover; object-position: top; border: 8px solid white; }
 .continue-payment label { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; color: #abb3ad; font-size: 9px; }
-.continue-payment .file-upload { min-height: 74px; padding: 10px; display: grid; place-items: center; border: 1px dashed #4b554e; border-radius: 3px; }
+.continue-payment .file-upload { min-height: 74px; }
 .continue-payment .file-upload input { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-.continue-payment .file-upload span { color: #d4dbd5; }
+.continue-payment .file-upload-label { color: #abb3ad; }
+.continue-payment .file-upload-surface { border-color: #4b554e; background: transparent; }
+.continue-payment .file-upload-surface strong, .continue-payment .file-upload-surface small { color: #d4dbd5; }
+.continue-payment .file-upload.has-file .file-upload-surface { border-color: #87a68f; background: rgba(255,255,255,.06); }
+.continue-payment .file-upload-help { margin-top: 7px; color: #abb3ad; }
+.continue-payment > .in-app-browser-help { color: #704812; }
 .hold-notice { color: #7b827b; font-size: 10px; font-weight: 800; }
 
 .payment-review-card { margin: 10px 0; padding: 25px; border: 1px solid var(--line); border-radius: 5px; background: white; }

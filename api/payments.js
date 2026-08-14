@@ -9,19 +9,35 @@ const allowedTypes = new Map([
   ['application/pdf', 'pdf'],
 ]);
 
-export default async function handler(request, response) {
+export function normalizePaymentReference(value) {
+  return String(value || '').trim() || 'Not provided';
+}
+
+function currentPayment(booking) {
+  return Array.isArray(booking.payments) ? booking.payments[0] : booking.payments;
+}
+
+export function createPaymentsHandler({
+  getAdmin = getAdminClient,
+  findBooking = findPublicBooking,
+  notify = notifyStaff,
+} = {}) {
+  return async function handler(request, response) {
   if (!['POST', 'PUT'].includes(request.method)) {
     response.setHeader('Allow', 'POST, PUT');
     return sendJson(response, 405, { error: 'Method not allowed.' });
   }
 
   try {
-    const admin = getAdminClient();
+    const admin = getAdmin();
     const body = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : (request.body || {});
-    const booking = await findPublicBooking(admin, body.lookupMethod, body.lookupValue);
+    const booking = await findBooking(admin, body.lookupMethod, body.lookupValue);
     if (!booking) return sendJson(response, 404, { error: 'Booking not found.' });
     if (booking.status === 'expired') return sendJson(response, 409, { error: 'The 15-minute payment hold has expired and the slots are available again.' });
     if (!['awaiting_payment', 'payment_submitted'].includes(booking.status)) return sendJson(response, 409, { error: 'This booking no longer accepts payment proof.' });
+    if (booking.status === 'payment_submitted' && currentPayment(booking)?.receipt_path) {
+      return sendJson(response, 409, { error: 'Payment proof was already submitted for this booking.' });
+    }
 
     if (request.method === 'POST') {
       const mimeType = String(body.mimeType || '').toLowerCase();
@@ -36,7 +52,7 @@ export default async function handler(request, response) {
       return sendJson(response, 200, { path, token: data.token });
     }
 
-    const referenceNumber = String(body.referenceNumber || '').trim() || 'Not provided';
+    const referenceNumber = normalizePaymentReference(body.referenceNumber);
     const receiptPath = String(body.receiptPath || '');
     if (!receiptPath.startsWith(`${booking.id}/`)) return sendJson(response, 400, { error: 'Upload the payment receipt.' });
 
@@ -52,13 +68,17 @@ export default async function handler(request, response) {
       review_note: null,
     };
     const { error: paymentError } = await admin.from('payments').upsert(paymentRecord, { onConflict: 'booking_id' });
-    if (paymentError) throw paymentError;
+    if (paymentError) {
+      const { error: cleanupError } = await admin.storage.from('payment-receipts').remove([receiptPath]);
+      if (cleanupError) console.error('[api/payments] failed upload cleanup', { code: cleanupError.code || 'storage_cleanup_failed' });
+      throw paymentError;
+    }
     const { error: bookingError } = await admin.from('bookings').update({ status: 'payment_submitted' }).eq('id', booking.id);
     if (bookingError) throw bookingError;
     const { error: slotError } = await admin.from('booking_slots').update({ status: 'payment_submitted' }).eq('booking_id', booking.id).eq('status', 'held');
     if (slotError) throw slotError;
 
-    await notifyStaff(admin, {
+    await notify(admin, {
       booking_id: booking.id,
       kind: 'payment_submitted',
       title: `${booking.tracking_number} · GCash proof uploaded`,
@@ -71,6 +91,9 @@ export default async function handler(request, response) {
     return sendJson(response, 200, { booking: publicBookingPayload(booking) });
   } catch (error) {
     console.error('[api/payments] failed', { method: request.method, message: error.message });
-    return sendJson(response, 500, { error: error.message || 'The payment proof could not be submitted.' });
+    return sendJson(response, 500, { error: 'The payment proof could not be submitted. Please try again, or contact the venue if the problem continues.' });
   }
+  };
 }
+
+export default createPaymentsHandler();
