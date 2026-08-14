@@ -1620,7 +1620,6 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
   const [pinMessage, setPinMessage] = useState('');
   const [pinSubmitting, setPinSubmitting] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const activityCleanupRef = useRef(0);
 
   const authorizedFetch = async (url, options = {}) => fetch(url, {
     ...options,
@@ -1641,10 +1640,6 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
   const loadNotifications = async () => {
     if (!session?.user) return;
     const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    if (Date.now() - activityCleanupRef.current > 5 * 60 * 1000) {
-      activityCleanupRef.current = Date.now();
-      await authorizedFetch('/api/activity', { method: 'DELETE' });
-    }
     const { data, error } = await supabase.from('notifications').select('id, kind, title, message, read_at, created_at, booking_id').gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20);
     if (!error) setNotifications(data || []);
   };
