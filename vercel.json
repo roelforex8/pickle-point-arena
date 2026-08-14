@@ -7,6 +7,6 @@
     { "source": "/admin/:path*", "destination": "/index.html" }
   ],
   "crons": [
-    { "path": "/api/activity", "schedule": "17 3 * * *" }
+    { "path": "/api/activity", "schedule": "0 19 * * *" }
   ]
 }
