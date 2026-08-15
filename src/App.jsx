@@ -3,8 +3,11 @@ import { supabase } from './supabase';
 import { groupBookingSlots } from './bookingSummary';
 import CustomerBookingSummary from './CustomerBookingSummary';
 import PasswordInput from './PasswordInput';
+import ReceiptFilePicker from './ReceiptFilePicker';
 import { administratorRemovalConfirmation, administratorStatusLabel, canConfirmAdministratorRemoval } from './adminManagement';
-import { detectReceiptMimeType, formatReceiptFileSize, isFacebookInAppBrowser, receiptFileAccept, validateReceiptFile } from './receiptUpload';
+import { BrowserHandoffPrompt } from './InAppBrowserHandoff';
+import { detectFacebookInAppBrowser, shouldShowBrowserHandoff } from './browserHandoff';
+import { detectReceiptMimeType, validateReceiptFile } from './receiptUpload';
 import { changeOwnerPassword } from './ownerPassword';
 
 const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
@@ -180,22 +183,6 @@ const passwordRequirements = 'Use at least 5 letters, including 1 capital letter
 
 const storageReceiptMimeTypes = new Set(['image/jpeg', 'image/png', 'application/pdf']);
 
-function ReceiptFilePicker({ id, file, onFileChange }) {
-  const showInAppBrowserHelp = isFacebookInAppBrowser(typeof navigator === 'undefined' ? '' : navigator.userAgent);
-  return <>
-    <label className={`file-upload${file ? ' has-file' : ''}`} htmlFor={id}>
-      <span className="file-upload-label">Receipt or screenshot</span>
-      <input id={id} type="file" accept={receiptFileAccept} onChange={onFileChange} aria-describedby={`${id}-status ${id}-help`} />
-      <span className="file-upload-surface">
-        <strong>{file ? 'File selected' : 'Choose an image or PDF (20 MB max)'}</strong>
-        <small id={`${id}-status`}>{file ? `${file.name} · ${formatReceiptFileSize(file.size)}` : 'No file selected'}</small>
-      </span>
-    </label>
-    <p className="file-upload-help" id={`${id}-help`}>Save your receipt to Photos or Files first, then choose it here.</p>
-    {showInAppBrowserHelp && <p className="in-app-browser-help" role="note">Having trouble choosing a file? Open this page in Safari or Chrome.</p>}
-  </>;
-}
-
 async function convertReceiptImageToJpeg(file) {
   const objectUrl = URL.createObjectURL(file);
   try {
@@ -282,6 +269,11 @@ function App() {
   const [period, setPeriod] = useState('Weekly');
   const [heroPhotoIndex, setHeroPhotoIndex] = useState(0);
   const [trackingHandoff, setTrackingHandoff] = useState(null);
+  const browserInfo = useMemo(() => detectFacebookInAppBrowser(typeof navigator === 'undefined' ? '' : navigator.userAgent), []);
+  const [showBrowserHandoff, setShowBrowserHandoff] = useState(() => shouldShowBrowserHandoff({
+    userAgent: typeof navigator === 'undefined' ? '' : navigator.userAgent,
+    sessionStorage: typeof window === 'undefined' ? null : window.sessionStorage,
+  }));
   const heroPointerStartX = useRef(null);
   const courtsOpenTonight = courtNames.length;
 
@@ -314,6 +306,7 @@ function App() {
 
   return (
     <main>
+      {showBrowserHandoff && <BrowserHandoffPrompt platform={browserInfo.platform} onDismiss={() => setShowBrowserHandoff(false)} />}
       <header className="topbar">
         <button className="brand brand-image" onClick={() => setView('home')} aria-label="Pickle Point Arena home">
           <img src="/header-logo-colored.png" alt="Pickle Point Arena" />
@@ -409,6 +402,7 @@ function App() {
             selectedSlots={selectedSlots}
             setSelectedSlots={setSelectedSlots}
             blockedSlots={blockedSlots}
+            browserInfo={browserInfo}
             onTrackBooking={(booking) => {
               setTrackingHandoff(booking);
               setView('tracking');
@@ -418,7 +412,7 @@ function App() {
         )}
         {view === 'courts' && <CourtsPreview onBook={() => setView('booking')} />}
         {view === 'location' && <LocationPreview />}
-        {view === 'tracking' && <TrackingPreview initialBooking={trackingHandoff} />}
+        {view === 'tracking' && <TrackingPreview initialBooking={trackingHandoff} browserInfo={browserInfo} />}
       </section>
 
       <section className="closing-cta">
@@ -454,7 +448,7 @@ function HomePreview({ onStart }) {
   );
 }
 
-function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSelectedSlots, onTrackBooking }) {
+function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSelectedSlots, onTrackBooking, browserInfo }) {
   const today = manilaTodayKey();
   const [nowTick, setNowTick] = useState(Date.now());
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -822,7 +816,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
           </div>
           <div className="payment-stage">
             <div className="payment-choice"><span className="step-number">02</span><h4>Payment method</h4><div className="payment-tabs"><button className="active"><strong>GCash</strong><small>Available now</small></button><button disabled><strong>Maya</strong><small>Coming soon</small></button><button disabled><strong>Metrobank</strong><small>Coming soon</small></button></div><div className="qr-payment"><div className="qr-frame"><img src="/gcash-qr-hd.png" alt="High-resolution GCash QR code for Pickle Point Arena payment" /></div><div><span className="gcash-label">GCASH PAYMENT</span><h4>Scan and pay ₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</h4><p>Enter the exact amount shown. Transfer fees may apply.</p><a href="/gcash-qr-hd.png" download="Pickle-Point-Arena-GCash-QR.png">↓ Download GCash QR</a></div></div></div>
-            <div className="proof-form"><span className="step-number">03</span><h4>Submit payment proof</h4><label>Reference number<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="(optional)" /></label><ReceiptFilePicker id="checkout-receipt-file" file={proofFile} onFileChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setProofFile(file); setCheckoutMessage(''); } catch (error) { setProofFile(null); setCheckoutMessage(error.message); event.target.value = ''; } }} />{checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}<p>HEIC, HEIF, and WebP phone images are converted securely to JPEG before upload. The receipt is stored privately for Owner/Admin review.</p><div className="payment-summary"><span>Customer</span><strong>{customerName}</strong><span>Tracking</span><strong>{trackingNumber}</strong><span>Amount</span><strong>₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</strong></div></div>
+            <div className="proof-form"><span className="step-number">03</span><h4>Submit payment proof</h4><label>Reference number<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="(optional)" /></label><ReceiptFilePicker id="checkout-receipt-file" file={proofFile} browserInfo={browserInfo} onFileRemove={() => { setProofFile(null); setCheckoutMessage(''); }} onFileChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setProofFile(file); setCheckoutMessage(''); } catch (error) { setProofFile(null); setCheckoutMessage(error.message); event.target.value = ''; } }} />{checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}<p>HEIC, HEIF, and WebP phone images are converted securely to JPEG before upload. The receipt is stored privately for Owner/Admin review.</p><div className="payment-summary"><span>Customer</span><strong>{customerName}</strong><span>Tracking</span><strong>{trackingNumber}</strong><span>Amount</span><strong>₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</strong></div></div>
           </div>
           <div className="checkout-footer"><span className="hold-notice">Reserved until {bookingRecord?.holdExpiresAt ? new Date(bookingRecord.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }) : '—'}</span><button className="primary" disabled={!paymentReady || bookingSubmitting} onClick={submitPaymentProof}>{bookingSubmitting ? 'Uploading securely…' : 'Submit payment proof'} <span>→</span></button></div>
         </>}
@@ -938,7 +932,7 @@ function LocationPreview() {
   );
 }
 
-function TrackingPreview({ initialBooking = null }) {
+function TrackingPreview({ initialBooking = null, browserInfo }) {
   const [lookupMethod, setLookupMethod] = useState(initialBooking ? 'tracking' : 'email');
   const [lookupValue, setLookupValue] = useState(initialBooking?.trackingNumber || '');
   const [lookupMessage, setLookupMessage] = useState('');
@@ -1017,7 +1011,7 @@ function TrackingPreview({ initialBooking = null }) {
             <p>Upload payment before {new Date(booking.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })} to keep the reservation.</p>
             <img src="/gcash-qr-hd.png" alt="GCash QR code" />
             <label>GCash reference number<input value={referenceNumber} onChange={(event) => setReferenceNumber(event.target.value)} placeholder="(optional)" /></label>
-            <ReceiptFilePicker id="tracking-receipt-file" file={receiptFile} onFileChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setReceiptFile(file); setLookupMessage(''); } catch (error) { setReceiptFile(null); setLookupMessage(error.message); event.target.value = ''; } }} />
+            <ReceiptFilePicker id="tracking-receipt-file" file={receiptFile} browserInfo={browserInfo} onFileRemove={() => { setReceiptFile(null); setLookupMessage(''); }} onFileChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setReceiptFile(file); setLookupMessage(''); } catch (error) { setReceiptFile(null); setLookupMessage(error.message); event.target.value = ''; } }} />
             <button type="button" className="primary full" disabled={proofSubmitting || !receiptFile} onClick={continuePayment}>{proofSubmitting ? 'Uploading…' : 'Submit payment proof'}</button>
           </div>}
         </CustomerBookingSummary>}

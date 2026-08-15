@@ -31,10 +31,6 @@ export function formatReceiptFileSize(bytes) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function isFacebookInAppBrowser(userAgent = '') {
-  return /FBAN|FBAV|FB_IAB|MessengerForiOS/i.test(String(userAgent));
-}
-
 function startsWith(bytes, signature) {
   return signature.every((value, index) => bytes[index] === value);
 }
