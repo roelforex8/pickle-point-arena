@@ -3,7 +3,7 @@ import { notifyStaff } from './_booking.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 
-function selectionInterval(selection) {
+export function selectionInterval(selection) {
   const date = String(selection?.date || '');
   const hour = Number(selection?.hour);
   const courtId = Number(selection?.courtId);
@@ -15,7 +15,7 @@ function selectionInterval(selection) {
   return { date, hour, courtId, startMs: start.getTime(), endMs: start.getTime() + HOUR_MS };
 }
 
-export default async function handler(request, response) {
+export async function handler(request, response, { requireStaffFn = requireStaff, notify = notifyStaff } = {}) {
   response.setHeader('Cache-Control', 'no-store, max-age=0');
   if (request.method !== 'POST') {
     response.setHeader('Allow', 'POST');
@@ -23,7 +23,7 @@ export default async function handler(request, response) {
   }
 
   try {
-    const auth = await requireStaff(request);
+    const auth = await requireStaffFn(request);
     if (auth.error) return sendJson(response, auth.status, { error: auth.error });
     const body = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : (request.body || {});
     const action = body.action === 'unblock' ? 'unblock' : 'block';
@@ -57,7 +57,7 @@ export default async function handler(request, response) {
         if (error) throw error;
       }
       const actorRole = auth.profile.role === 'owner' ? 'Owner' : 'Administrator';
-      await notifyStaff(auth.admin, { kind: 'system', title: `Court availability blocked by ${auth.profile.full_name || actorRole}`, message: `${actorRole} · ${rows.length} court-hour${rows.length === 1 ? '' : 's'} blocked from the staff calendar.` });
+      await notify(auth.admin, { kind: 'system', title: `Court availability blocked by ${auth.profile.full_name || actorRole}`, message: `${actorRole} · ${rows.length} court-hour${rows.length === 1 ? '' : 's'} blocked from the staff calendar.` });
       return sendJson(response, 200, { changed: rows.length, skipped: selections.length - rows.length });
     }
 
@@ -88,9 +88,11 @@ export default async function handler(request, response) {
     }
     const changed = selections.filter((item) => affected.some((block) => overlaps(block, 'starts_at', 'ends_at', item))).length;
     const actorRole = auth.profile.role === 'owner' ? 'Owner' : 'Administrator';
-    await notifyStaff(auth.admin, { kind: 'system', title: `Court availability unblocked by ${auth.profile.full_name || actorRole}`, message: `${actorRole} · ${changed} court-hour${changed === 1 ? '' : 's'} unblocked from the staff calendar.` });
+    await notify(auth.admin, { kind: 'system', title: `Court availability unblocked by ${auth.profile.full_name || actorRole}`, message: `${actorRole} · ${changed} court-hour${changed === 1 ? '' : 's'} unblocked from the staff calendar.` });
     return sendJson(response, 200, { changed, skipped: selections.length - changed });
   } catch (error) {
     return sendJson(response, 500, { error: error.message || 'Court availability could not be updated.' });
   }
 }
+
+export default handler;

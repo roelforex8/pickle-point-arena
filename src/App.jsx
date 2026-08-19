@@ -9,6 +9,7 @@ import { BrowserHandoffPrompt } from './InAppBrowserHandoff';
 import { detectFacebookInAppBrowser, shouldShowBrowserHandoff } from './browserHandoff';
 import { detectReceiptMimeType, validateReceiptFile } from './receiptUpload';
 import { changeOwnerPassword } from './ownerPassword';
+import { postStaffBlocks } from './staffBlocks';
 
 const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
 const courtGalleryPhotos = [
@@ -1274,15 +1275,20 @@ function OperationsCalendar({ selectedDate, setSelectedDate, refreshKey, role, s
     if (!applicable.length) return setCalendarMessage(`Select at least one ${action === 'block' ? 'available' : 'blocked'} court-hour.`);
     setAvailabilitySubmitting(true);
     setCalendarMessage(`${action === 'block' ? 'Blocking' : 'Unblocking'} selected court-hours…`);
-    const response = await fetch('/api/staff-blocks', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({ action, reason: availabilityReason, selections: applicable }) });
-    const result = await response.json();
-    if (response.ok) {
-      setCalendarMessage(`${result.changed || 0} court-hour${result.changed === 1 ? '' : 's'} ${action === 'block' ? 'blocked' : 'unblocked'} successfully.${result.skipped ? ` ${result.skipped} unchanged.` : ''}`);
-      setAvailabilitySelections(new Map());
-      await loadSchedule();
-      onChanged?.();
-    } else setCalendarMessage(result.error || 'Court availability could not be updated.');
-    setAvailabilitySubmitting(false);
+    try {
+      const response = await postStaffBlocks(supabase, { action, reason: availabilityReason, selections: applicable });
+      const result = await response.json();
+      if (response.ok) {
+        setCalendarMessage(`${result.changed || 0} court-hour${result.changed === 1 ? '' : 's'} ${action === 'block' ? 'blocked' : 'unblocked'} successfully.${result.skipped ? ` ${result.skipped} unchanged.` : ''}`);
+        setAvailabilitySelections(new Map());
+        await loadSchedule();
+        onChanged?.();
+      } else setCalendarMessage(result.error || 'Court availability could not be updated.');
+    } catch (error) {
+      setCalendarMessage(error.message || 'Court availability could not be updated.');
+    } finally {
+      setAvailabilitySubmitting(false);
+    }
   };
 
   const cancelConfirmedBooking = async () => {
