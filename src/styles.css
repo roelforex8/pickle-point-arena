@@ -750,6 +750,7 @@ button { cursor: pointer; }
 .operations-summary i.awaiting { background: #f4c84b; }
 .operations-summary i.pending { background: #cfe6f5; }
 .operations-summary i.booked { background: var(--forest); }
+.operations-summary i.walkIn { background: #245c79; }
 .operations-summary i.blocked { background: #8f928f; }
 .operations-summary span { font-size: 9px; font-weight: 800; }
 .operations-summary strong { font-size: 18px; }
@@ -759,10 +760,11 @@ button { cursor: pointer; }
 .operations-schedule thead th:first-child { z-index: 5; }
 .operations-schedule .slot.available { color: #5e665e; }
 .operations-schedule .slot.available span { opacity: .35; }
+.operations-schedule .slot.walkIn { color: white; border-color: #245c79; background: #245c79; }
 .operations-schedule .slot.muted { opacity: .14; filter: grayscale(1); }
 .operations-schedule .slot.staff-selected { position: relative; color: white; border-color: var(--orange); background: var(--orange); box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px var(--orange); }
 .operations-schedule .slot.staff-selected span { opacity: 1; }
-.availability-batch { position: sticky; bottom: 8px; z-index: 8; margin-top: 14px; padding: 14px; display: grid; grid-template-columns: minmax(210px, 1fr) minmax(150px, 220px) auto auto auto; align-items: end; gap: 9px; border: 1px solid #cfd5cf; border-radius: 5px; background: #f9faf7; box-shadow: 0 12px 30px rgba(24,37,28,.14); }
+.availability-batch { position: sticky; bottom: 8px; z-index: 8; margin-top: 14px; padding: 14px; display: grid; grid-template-columns: minmax(210px, 1fr) minmax(150px, 220px) auto auto auto auto; align-items: end; gap: 9px; border: 1px solid #cfd5cf; border-radius: 5px; background: #f9faf7; box-shadow: 0 12px 30px rgba(24,37,28,.14); }
 .availability-batch > div { display: flex; flex-direction: column; gap: 4px; }
 .availability-batch small { color: var(--orange); font: 700 8px monospace; letter-spacing: .12em; }
 .availability-batch strong { font-size: 11px; }
@@ -770,6 +772,7 @@ button { cursor: pointer; }
 .availability-batch label { display: flex; flex-direction: column; gap: 5px; color: #747b74; font-size: 8px; font-weight: 800; }
 .availability-batch select, .availability-batch button { min-height: 37px; padding: 0 10px; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--forest); font-size: 8px; font-weight: 900; }
 .availability-batch .block-selected { color: white; border-color: var(--orange); background: var(--orange); }
+.availability-batch .walk-in-selected { color: white; border-color: #245c79; background: #245c79; }
 .availability-batch .unblock-selected { color: white; border-color: #747974; background: #747974; }
 .availability-batch button:disabled { cursor: not-allowed; opacity: .42; }
 .booking-inspector { position: relative; margin-top: 12px; padding: 16px 46px 16px 16px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 15px; border: 1px solid var(--line); border-radius: 4px; background: #f7f7f3; }
@@ -779,6 +782,7 @@ button { cursor: pointer; }
 .inspector-status.awaiting { color: #58440b; background: #f4c84b; }
 .inspector-status.pending { color: #58440b; background: #f4c84b; }
 .inspector-status.booked { background: var(--orange); }
+.inspector-status.walkIn { background: #245c79; }
 .inspector-status.blocked { background: #8f928f; }
 .booking-inspector > div small { color: #858c85; font-size: 8px; letter-spacing: .12em; }
 .booking-inspector > div strong { display: block; margin-top: 4px; font-size: 12px; }
@@ -786,6 +790,23 @@ button { cursor: pointer; }
 .booking-inspector > button:not(.close-inspector) { min-height: 36px; padding: 0 11px; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--forest); font-size: 9px; font-weight: 900; }
 .close-inspector { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border: 0; background: transparent; color: #878e87; font-size: 18px; }
 .operations-note { margin: 12px 0 0; color: #8c928c; font-size: 8px; line-height: 1.45; text-align: center; }
+.walk-in-modal { position: fixed; inset: 0; z-index: 30; padding: 20px; display: grid; place-items: center; background: rgba(18, 24, 20, .68); }
+.walk-in-modal > section { position: relative; width: min(620px, 100%); max-height: calc(100dvh - 40px); padding: 28px; overflow-y: auto; border-radius: 5px; background: white; box-shadow: 0 24px 70px rgba(0, 0, 0, .3); }
+.walk-in-modal .modal-close { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border: 0; background: transparent; font-size: 20px; }
+.walk-in-modal > section > small, .walk-in-report > div > small { color: #245c79; font: 700 8px monospace; letter-spacing: .14em; }
+.walk-in-modal h3, .walk-in-report h3 { margin: 7px 0 5px; }
+.walk-in-modal > section > p, .walk-in-report > p { color: #737b74; font-size: 10px; line-height: 1.5; }
+.walk-in-slots { margin-top: 18px; display: grid; gap: 7px; }
+.walk-in-slots > div { padding: 11px 12px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid var(--line); border-radius: 3px; }
+.walk-in-slots span { display: flex; flex-direction: column; gap: 3px; }
+.walk-in-slots small { color: #747b74; font-size: 9px; }
+.walk-in-totals { margin-top: 14px; padding: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; border-radius: 3px; background: #f2f5f2; }
+.walk-in-totals span { display: flex; flex-direction: column; gap: 4px; color: #747b74; font-size: 8px; }
+.walk-in-totals strong { color: var(--ink); font-size: 13px; }
+.walk-in-error { color: #a13d20 !important; }
+.walk-in-actions { margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px; }
+.walk-in-actions button { min-height: 39px; padding: 0 14px; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--forest); font-size: 9px; font-weight: 900; }
+.walk-in-actions .confirm-walk-in { color: white; border-color: #245c79; background: #245c79; }
 
 .tracking-card { display: grid; grid-template-columns: 1fr 420px; background: white; border: 1px solid var(--line); min-height: 500px; }
 .tracking-copy { padding: 60px; background: linear-gradient(145deg, #e6eadf, #f6f3eb); }
@@ -910,6 +931,13 @@ button { cursor: pointer; }
 .sales-heading-actions .period-toggle button { min-height: 32px; border: 0; }
 .sales-chart { margin-top: 10px; }
 .sales-chart .bar-wrap > span { color: #6f776f; font-size: 8px; font-weight: 800; }
+.walk-in-report { margin-top: 10px; padding: 23px; border: 1px solid var(--line); border-radius: 4px; background: white; }
+.walk-in-report-list { margin-top: 15px; display: grid; gap: 8px; }
+.walk-in-report-list article { padding: 12px; display: grid; grid-template-columns: minmax(130px, .7fr) minmax(220px, 1.5fr) minmax(150px, .8fr); align-items: center; gap: 14px; border: 1px solid var(--line); border-radius: 3px; }
+.walk-in-report-list article > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.walk-in-report-list article > div:last-child { align-items: flex-end; }
+.walk-in-report-list span { color: #747b74; font-size: 9px; line-height: 1.4; }
+.walk-in-report-list strong { font-size: 11px; }
 
 .dashboard-top > div:first-child p { color: #6b726b; }
 .period-toggle { display: flex; padding: 4px; background: #e7e3da; border-radius: 4px; }
@@ -1303,6 +1331,11 @@ footer > div a:hover, footer > div a:focus-visible { color: white; text-decorati
   .operations-heading-actions { margin-top: 15px; justify-content: space-between; }
   .availability-batch { position: static; grid-template-columns: 1fr 1fr; }
   .availability-batch > div, .availability-batch label { grid-column: 1 / -1; }
+  .walk-in-modal { padding: 10px; }
+  .walk-in-modal > section { max-height: calc(100dvh - 20px); padding: 24px 16px 18px; }
+  .walk-in-totals { grid-template-columns: 1fr 1fr; }
+  .walk-in-report-list article { grid-template-columns: 1fr; }
+  .walk-in-report-list article > div:last-child { align-items: flex-start; }
   .operations-summary { display: flex; overflow-x: auto; padding-bottom: 7px; }
   .operations-summary button { min-width: 125px; }
   .booking-inspector { grid-template-columns: 1fr; align-items: start; }

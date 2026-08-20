@@ -1,5 +1,25 @@
 import { requireStaff, sendJson } from './_supabase.js';
 
+export function normalizeReportSource(value) {
+  return ['online', 'walk_in'].includes(value) ? value : 'all';
+}
+
+export function bookingsForSource(bookings = [], source = 'all') {
+  const normalized = normalizeReportSource(source);
+  return normalized === 'all' ? bookings : bookings.filter((booking) => (booking.booking_source || 'online') === normalized);
+}
+
+export function bookingSourceTotals(bookings = []) {
+  const summarize = (rows) => ({
+    bookingCount: rows.length,
+    revenue: rows.reduce((sum, booking) => sum + Number(booking.total_amount || 0), 0),
+    courtHours: rows.reduce((sum, booking) => sum + (booking.booking_slots?.length || 0), 0),
+  });
+  const online = bookingsForSource(bookings, 'online');
+  const walkIn = bookingsForSource(bookings, 'walk_in');
+  return { all: summarize(bookings), online: summarize(online), walkIn: summarize(walkIn) };
+}
+
 function manilaDateKey(value) {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(value));
   const fields = Object.fromEntries(parts.map((part) => [part.type, part.value]));
@@ -40,16 +60,21 @@ export default async function handler(request, response) {
   try {
     const auth = await requireStaff(request, 'owner');
     if (auth.error) return sendJson(response, auth.status, { error: auth.error });
+    const source = normalizeReportSource(request.query?.source);
 
     const [{ data: confirmed, error: confirmedError }, { data: pending, error: pendingError }] = await Promise.all([
-      auth.admin.from('bookings').select('id, total_amount, confirmed_at, booking_slots(id, court_id, hourly_rate)').eq('status', 'confirmed').order('confirmed_at', { ascending: false }).limit(5000),
-      auth.admin.from('bookings').select('id, total_amount').eq('status', 'payment_submitted').limit(5000),
+      auth.admin.from('bookings').select('id, tracking_number, booking_source, total_amount, confirmed_at, confirmed_by, profiles!bookings_confirmed_by_fkey(full_name), booking_slots(id, court_id, slot_start, slot_end, hourly_rate)').eq('status', 'confirmed').order('confirmed_at', { ascending: false }).limit(5000),
+      auth.admin.from('bookings').select('id, booking_source, total_amount').eq('status', 'payment_submitted').limit(5000),
     ]);
     if (confirmedError || pendingError) throw confirmedError || pendingError;
 
-    const totalRevenue = (confirmed || []).reduce((sum, booking) => sum + Number(booking.total_amount || 0), 0);
-    const courtHours = (confirmed || []).reduce((sum, booking) => sum + (booking.booking_slots?.length || 0), 0);
-    const pendingRevenue = (pending || []).reduce((sum, booking) => sum + Number(booking.total_amount || 0), 0);
+    const allConfirmed = confirmed || [];
+    const includedConfirmed = bookingsForSource(allConfirmed, source);
+    const includedPending = bookingsForSource(pending || [], source);
+    const sourceBreakdown = bookingSourceTotals(allConfirmed);
+    const totalRevenue = includedConfirmed.reduce((sum, booking) => sum + Number(booking.total_amount || 0), 0);
+    const courtHours = includedConfirmed.reduce((sum, booking) => sum + (booking.booking_slots?.length || 0), 0);
+    const pendingRevenue = includedPending.reduce((sum, booking) => sum + Number(booking.total_amount || 0), 0);
     const today = manilaDateKey(new Date());
     const period = ['day', 'week', 'month', 'range'].includes(request.query?.period) ? request.query.period : 'day';
     const requestedFrom = String(request.query?.from || '');
@@ -74,14 +99,14 @@ export default async function handler(request, response) {
       const key = bookingPeriodKey(booking);
       return key >= start && key <= end;
     };
-    const periodRevenue = (key) => (confirmed || []).filter((booking) => bookingPeriodKey(booking) === key).reduce((sum, booking) => sum + Number(booking.total_amount || 0), 0);
-    const windowRevenue = (start, end) => (confirmed || []).filter((booking) => inWindow(booking, start, end)).reduce((sum, booking) => sum + Number(booking.total_amount || 0), 0);
-    const windowBookings = (start, end) => (confirmed || []).filter((booking) => inWindow(booking, start, end)).length;
+    const periodRevenue = (key) => includedConfirmed.filter((booking) => bookingPeriodKey(booking) === key).reduce((sum, booking) => sum + Number(booking.total_amount || 0), 0);
+    const windowRevenue = (start, end) => includedConfirmed.filter((booking) => inWindow(booking, start, end)).reduce((sum, booking) => sum + Number(booking.total_amount || 0), 0);
+    const windowBookings = (start, end) => includedConfirmed.filter((booking) => inWindow(booking, start, end)).length;
     const currentRevenue = windowRevenue(currentKey, currentEnd);
     const previousRevenue = windowRevenue(previousKey, previousEnd);
     const courtBreakdown = (start, end = start) => {
       const courts = Array.from({ length: 6 }, (_, index) => ({ courtId: index + 1, revenue: 0, courtHours: 0 }));
-      (confirmed || []).filter((booking) => inWindow(booking, start, end)).forEach((booking) => {
+      includedConfirmed.filter((booking) => inWindow(booking, start, end)).forEach((booking) => {
         const slots = booking.booking_slots || [];
         const weight = slots.reduce((sum, slot) => sum + Math.max(1, Number(slot.hourly_rate || 0)), 0) || 1;
         slots.forEach((slot) => {
@@ -110,12 +135,14 @@ export default async function handler(request, response) {
     });
 
     return sendJson(response, 200, {
+      source,
+      sourceBreakdown,
       totalRevenue,
-      confirmedBookings: confirmed?.length || 0,
+      confirmedBookings: includedConfirmed.length,
       courtHours,
-      averageBooking: confirmed?.length ? Math.round(totalRevenue / confirmed.length) : 0,
+      averageBooking: includedConfirmed.length ? Math.round(totalRevenue / includedConfirmed.length) : 0,
       pendingRevenue,
-      pendingBookings: pending?.length || 0,
+      pendingBookings: includedPending.length,
       period,
       rangeFrom: period === 'range' ? requestedFrom : null,
       rangeTo: period === 'range' ? requestedTo : null,
@@ -138,6 +165,17 @@ export default async function handler(request, response) {
         };
       }),
       series,
+      walkInBookings: includedConfirmed.filter((booking) => (booking.booking_source || 'online') === 'walk_in' && inWindow(booking, currentKey, currentEnd)).map((booking) => {
+        const creator = Array.isArray(booking.profiles) ? booking.profiles[0] : booking.profiles;
+        return {
+          id: booking.id,
+          trackingNumber: booking.tracking_number,
+          confirmedAt: booking.confirmed_at,
+          amount: Number(booking.total_amount || 0),
+          createdBy: creator?.full_name || 'Administrator',
+          slots: (booking.booking_slots || []).map((slot) => ({ courtId: Number(slot.court_id), slotStart: slot.slot_start, slotEnd: slot.slot_end, hourlyRate: Number(slot.hourly_rate) })),
+        };
+      }),
     });
   } catch (error) {
     return sendJson(response, 500, { error: error.message || 'The sales report could not be loaded.' });

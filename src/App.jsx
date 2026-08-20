@@ -10,6 +10,7 @@ import { detectFacebookInAppBrowser, shouldShowBrowserHandoff } from './browserH
 import { detectReceiptMimeType, validateReceiptFile } from './receiptUpload';
 import { changeOwnerPassword } from './ownerPassword';
 import { postStaffBlocks } from './staffBlocks';
+import { postStaffWalkIn, walkInBookingSummary } from './walkInBooking';
 
 const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
 const courtGalleryPhotos = [
@@ -72,6 +73,7 @@ const statusDetails = {
   pending: { label: 'Payment submitted — pending verification', short: 'Pending' },
   awaiting: { label: 'Awaiting payment', short: 'Awaiting' },
   booked: { label: 'Confirmed booking', short: 'Booked' },
+  walkIn: { label: 'Confirmed Walk-In booking', short: 'Walk-In' },
   blocked: { label: 'Blocked by venue', short: 'Blocked' },
 };
 
@@ -1179,6 +1181,9 @@ function OperationsCalendar({ selectedDate, setSelectedDate, refreshKey, role, s
   const [availabilitySelections, setAvailabilitySelections] = useState(() => new Map());
   const [availabilityReason, setAvailabilityReason] = useState('Maintenance');
   const [availabilitySubmitting, setAvailabilitySubmitting] = useState(false);
+  const [walkInReviewOpen, setWalkInReviewOpen] = useState(false);
+  const [walkInSubmitting, setWalkInSubmitting] = useState(false);
+  const [walkInMessage, setWalkInMessage] = useState('');
   const loadRequestRef = useRef(0);
   const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => { const day = new Date(weekStart); day.setDate(weekStart.getDate() + index); return day; }), [weekStart]);
@@ -1251,7 +1256,8 @@ function OperationsCalendar({ selectedDate, setSelectedDate, refreshKey, role, s
     const end = start + 60 * 60 * 1000;
     const block = blockRows.find((row) => row.court_id === courtIndex + 1 && new Date(row.starts_at).getTime() < end && new Date(row.ends_at).getTime() > start);
     const row = slotRows.find((item) => item.court_id === courtIndex + 1 && Math.abs(new Date(item.slot_start).getTime() - start) < 1000);
-    const mapped = { held: 'awaiting', payment_submitted: 'pending', confirmed: 'booked' };
+    const booking = Array.isArray(row?.bookings) ? row.bookings[0] : row?.bookings;
+    const mapped = { held: 'awaiting', payment_submitted: 'pending', confirmed: booking?.booking_source === 'walk_in' ? 'walkIn' : 'booked' };
     if (start <= nowTick) {
       if (row && mapped[row.status]) return { status: mapped[row.status], row, historical: true };
       if (block) return { status: 'blocked', block, historical: true };
@@ -1314,15 +1320,44 @@ function OperationsCalendar({ selectedDate, setSelectedDate, refreshKey, role, s
 
   const selectedAvailable = [...availabilitySelections.values()].filter((item) => item.status === 'available').length;
   const selectedBlocked = [...availabilitySelections.values()].filter((item) => item.status === 'blocked').length;
+  const walkInSelections = [...availabilitySelections.values()].filter((item) => item.status === 'available');
+  const walkInSummary = walkInBookingSummary(walkInSelections);
+
+  const openWalkInReview = () => {
+    if (!walkInSelections.length) return setCalendarMessage('Select at least one available court-hour for the Walk-In booking.');
+    setWalkInMessage('');
+    setWalkInReviewOpen(true);
+  };
+
+  const confirmWalkInBooking = async () => {
+    if (!walkInSelections.length || walkInSubmitting) return;
+    setWalkInSubmitting(true);
+    setWalkInMessage('');
+    try {
+      const response = await postStaffWalkIn(supabase, walkInSelections.map(({ date, hour, courtId }) => ({ date, hour, courtId })));
+      const result = await response.json();
+      if (!response.ok) return setWalkInMessage(result.error || 'The Walk-In booking could not be created.');
+      setWalkInReviewOpen(false);
+      setAvailabilitySelections(new Map());
+      setCalendarMessage(`${result.booking?.trackingNumber || 'Walk-In'} confirmed · ₱${Number(result.booking?.totalAmount || 0).toLocaleString()} · Booking fee ₱0.`);
+      await loadSchedule();
+      onChanged?.();
+    } catch (error) {
+      setWalkInMessage(error.message || 'The Walk-In booking could not be created.');
+    } finally {
+      setWalkInSubmitting(false);
+    }
+  };
 
   return <section className={`operations-calendar ${scheduleOpen ? 'expanded' : 'collapsed'}`}>
     <button className="operations-heading operations-toggle" type="button" aria-expanded={scheduleOpen} onClick={() => { setScheduleOpen((open) => !open); setSelectedBooking(null); }}><div><small>INTERNAL SCHEDULE</small><h3>Bookings & court status</h3><p>View bookings or select court-hours to block and unblock.</p></div><b>{scheduleOpen ? '−' : '+'}</b></button>
     {scheduleOpen && <div className="operations-calendar-content"><label className="operations-date-picker">Date<input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label><div className="week-strip operations-week">{weekDays.map((day) => <button key={dateKey(day)} className={dateKey(day) === selectedDate ? 'active' : ''} onClick={() => setSelectedDate(dateKey(day))}><small>{day.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}</small><strong>{day.getDate()}</strong></button>)}</div>
     <div className="schedule-wrap operations-schedule"><table className="schedule-table"><thead><tr><th>TIME</th>{courtNames.map((court) => <th key={court}>{court}</th>)}</tr></thead><tbody>{hours.map((hour) => <tr key={hour}><th>{timeRange(hour)}</th>{courtNames.map((court, courtIndex) => { const { status } = getSlotData(hour, courtIndex); const isPast = status === 'past'; const availabilityKey = `${selectedDate}|${hour}|${courtIndex + 1}`; const chosen = availabilitySelections.has(availabilityKey); return <td key={court}><button className={`slot ${status} ${chosen ? 'staff-selected' : ''}`} disabled={isPast} onClick={() => { if (isPast) return; if (status === 'available' || status === 'blocked') toggleAvailabilityCell(hour, courtIndex, status); else inspectSlot(hour, courtIndex); }} aria-pressed={chosen} aria-label={`${court}, ${timeRange(hour)}, ${statusDetails[status].label}`}><span>{chosen ? 'SELECTED' : statusDetails[status].short}</span></button></td>; })}</tr>)}</tbody></table></div>
-    {availabilitySelections.size > 0 && <div className="availability-batch"><div><small>BATCH AVAILABILITY</small><strong>{availabilitySelections.size} court-hour{availabilitySelections.size === 1 ? '' : 's'} selected across one or more days</strong><span>{selectedAvailable} available · {selectedBlocked} blocked</span></div><label>Blocking reason<select value={availabilityReason} onChange={(event) => setAvailabilityReason(event.target.value)}><option>Maintenance</option><option>Private event</option><option>Weather</option><option>Venue closure</option></select></label><button type="button" className="block-selected" disabled={availabilitySubmitting || !selectedAvailable} onClick={() => changeAvailability('block')}>Block selected</button><button type="button" className="unblock-selected" disabled={availabilitySubmitting || !selectedBlocked} onClick={() => changeAvailability('unblock')}>Unblock selected</button><button type="button" className="clear-selected" disabled={availabilitySubmitting} onClick={() => setAvailabilitySelections(new Map())}>Clear</button></div>}
-    {selectedBooking && <div className="booking-inspector"><span className={`inspector-status ${selectedBooking.status}`}>{statusDetails[selectedBooking.status].short}</span><div><small>SELECTED SLOT</small><strong>{courtNames[selectedBooking.courtIndex]} · {timeRange(selectedBooking.hour)}</strong><p>{selectedBooking.status === 'past' ? (selectedBooking.row ? `${selectedBooking.row?.bookings?.tracking_number || 'Historical booking'} · ${selectedBooking.row?.bookings?.customer_name || 'Customer'}` : 'This hour has already passed and is no longer bookable.') : selectedBooking.status === 'available' ? 'This slot is open for customer booking.' : selectedBooking.status === 'blocked' ? `Blocked by venue: ${selectedBooking.block?.reason || 'Unavailable'}.` : `${selectedBooking.row?.bookings?.tracking_number || 'Booking'} · ${selectedBooking.row?.bookings?.customer_name || 'Customer'}`}</p></div>{role === 'owner' && selectedBooking.status === 'booked' && <button className="cancel-booking-button" type="button" onClick={() => setCancelTarget({ bookingId: selectedBooking.row?.booking_id, tracking: selectedBooking.row?.bookings?.tracking_number })}>Cancel booking</button>}<button className="close-inspector" onClick={() => setSelectedBooking(null)}>×</button></div>}
+    {availabilitySelections.size > 0 && <div className="availability-batch"><div><small>BATCH AVAILABILITY</small><strong>{availabilitySelections.size} court-hour{availabilitySelections.size === 1 ? '' : 's'} selected across one or more days</strong><span>{selectedAvailable} available · {selectedBlocked} blocked</span></div><label>Blocking reason<select value={availabilityReason} onChange={(event) => setAvailabilityReason(event.target.value)}><option>Maintenance</option><option>Private event</option><option>Weather</option><option>Venue closure</option></select></label><button type="button" className="walk-in-selected" disabled={availabilitySubmitting || walkInSubmitting || !selectedAvailable} onClick={openWalkInReview}>Walk-In</button><button type="button" className="block-selected" disabled={availabilitySubmitting || walkInSubmitting || !selectedAvailable} onClick={() => changeAvailability('block')}>Block selected</button><button type="button" className="unblock-selected" disabled={availabilitySubmitting || walkInSubmitting || !selectedBlocked} onClick={() => changeAvailability('unblock')}>Unblock selected</button><button type="button" className="clear-selected" disabled={availabilitySubmitting || walkInSubmitting} onClick={() => setAvailabilitySelections(new Map())}>Clear</button></div>}
+    {selectedBooking && <div className="booking-inspector"><span className={`inspector-status ${selectedBooking.status}`}>{statusDetails[selectedBooking.status].short}</span><div><small>SELECTED SLOT</small><strong>{courtNames[selectedBooking.courtIndex]} · {timeRange(selectedBooking.hour)}</strong><p>{selectedBooking.status === 'past' ? (selectedBooking.row ? `${selectedBooking.row?.bookings?.tracking_number || 'Historical booking'} · ${selectedBooking.row?.bookings?.customer_name || 'Customer'}` : 'This hour has already passed and is no longer bookable.') : selectedBooking.status === 'available' ? 'This slot is open for customer booking.' : selectedBooking.status === 'blocked' ? `Blocked by venue: ${selectedBooking.block?.reason || 'Unavailable'}.` : `${selectedBooking.row?.bookings?.tracking_number || 'Booking'} · ${selectedBooking.row?.bookings?.customer_name || 'Customer'}`}</p></div>{role === 'owner' && ['booked', 'walkIn'].includes(selectedBooking.status) && <button className="cancel-booking-button" type="button" onClick={() => setCancelTarget({ bookingId: selectedBooking.row?.booking_id, tracking: selectedBooking.row?.bookings?.tracking_number })}>Cancel booking</button>}<button className="close-inspector" onClick={() => setSelectedBooking(null)}>×</button></div>}
     <p className="operations-note">{calendarMessage} · reconciles every 5 seconds.</p></div>}
     {cancelTarget && <div className="cancel-booking-modal" role="dialog" aria-modal="true" aria-label="Cancel confirmed booking"><div><button className="modal-close" type="button" onClick={() => setCancelTarget(null)}>×</button><small>OWNER CANCELLATION</small><h3>Cancel {cancelTarget.tracking || 'this booking'}?</h3><p>This releases every court slot in the confirmed booking. Enter your four-digit Owner PIN to continue.</p><label>Cancellation PIN<PasswordInput inputMode="numeric" maxLength="4" value={cancelPin} onChange={(event) => setCancelPin(event.target.value.replace(/\D/g, '').slice(0, 4))} autoComplete="off" autoFocus /></label>{cancelMessage && <p className="cancel-error">{cancelMessage}</p>}<button className="confirm-cancellation" type="button" onClick={cancelConfirmedBooking} disabled={cancelSubmitting}>{cancelSubmitting ? 'Cancelling…' : 'Cancel confirmed booking'}</button></div></div>}
+    {walkInReviewOpen && <div className="walk-in-modal" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !walkInSubmitting) setWalkInReviewOpen(false); }}><section role="dialog" aria-modal="true" aria-labelledby="walk-in-review-title"><button className="modal-close" type="button" aria-label="Close Walk-In review" disabled={walkInSubmitting} onClick={() => setWalkInReviewOpen(false)}>×</button><small>ADMIN WALK-IN</small><h3 id="walk-in-review-title">Review Walk-In booking</h3><p>Confirm these available court-hours as a paid physical transaction. No QR receipt is required.</p><div className="walk-in-slots">{walkInSummary.items.map((item) => <div key={`${item.date}|${item.hour}|${item.courtId}`}><span><strong>{courtNames[item.courtId - 1]}</strong><small>{new Date(`${item.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · {timeRange(item.hour)}</small></span><b>₱{item.hourlyRate.toLocaleString()}</b></div>)}</div><div className="walk-in-totals"><span>Court-hours<strong>{walkInSummary.courtHours}</strong></span><span>Subtotal<strong>₱{walkInSummary.subtotal.toLocaleString()}</strong></span><span>Booking fee<strong>₱0</strong></span><span>Total amount<strong>₱{walkInSummary.totalAmount.toLocaleString()}</strong></span></div>{walkInMessage && <p className="walk-in-error" role="alert">{walkInMessage}</p>}<div className="walk-in-actions"><button type="button" disabled={walkInSubmitting} onClick={() => setWalkInReviewOpen(false)}>Back</button><button className="confirm-walk-in" type="button" disabled={walkInSubmitting} onClick={confirmWalkInBooking}>{walkInSubmitting ? 'Confirming…' : 'Confirm Walk-In booking'}</button></div></section></div>}
   </section>;
 }
 
@@ -1453,6 +1488,7 @@ function PaymentReview({ session, refreshKey, onChanged, activityPanel }) {
 function OwnerSalesReport({ session, refreshKey }) {
   const [report, setReport] = useState(null);
   const [period, setPeriod] = useState('day');
+  const [reportSource, setReportSource] = useState('all');
   const [rangeStart, setRangeStart] = useState(manilaTodayKey());
   const [rangeEnd, setRangeEnd] = useState(manilaTodayKey());
   const [appliedRange, setAppliedRange] = useState({ from: manilaTodayKey(), to: manilaTodayKey() });
@@ -1466,13 +1502,13 @@ function OwnerSalesReport({ session, refreshKey }) {
   const loadReport = useCallback(async () => {
     if (!session?.access_token) return;
     const rangeQuery = period === 'range' ? `&from=${encodeURIComponent(appliedRange.from)}&to=${encodeURIComponent(appliedRange.to)}` : '';
-    const response = await fetch(`/api/reports?period=${period}${rangeQuery}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+    const response = await fetch(`/api/reports?period=${period}&source=${reportSource}${rangeQuery}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
     const result = await response.json();
     if (response.ok) {
       setReport(result);
-      setMessage('Confirmed payments only · live owner report.');
+      setMessage('Confirmed bookings only · live owner report.');
     } else setMessage(result.error || 'The sales report could not be loaded.');
-  }, [period, appliedRange, session?.access_token]);
+  }, [period, reportSource, appliedRange, session?.access_token]);
 
   useEffect(() => { loadReport(); }, [loadReport, refreshKey]);
   useEffect(() => {
@@ -1557,7 +1593,7 @@ function OwnerSalesReport({ session, refreshKey }) {
   const selectedCourtRevenue = selectedCourtRows.reduce((sum, court) => sum + Number(court.currentRevenue || 0), 0);
   const selectedCourtHours = selectedCourtRows.reduce((sum, court) => sum + Number(court.currentCourtHours || 0), 0);
   return <section className="owner-sales-report">
-    <div className="sales-report-heading"><div><small>OWNER FINANCIAL REPORT</small><h3>Confirmed sales comparison</h3><p>{message}</p></div><div className="sales-heading-actions"><div className="period-toggle" aria-label="Revenue comparison period">{['day', 'week', 'month'].map((value) => <button type="button" className={period === value ? 'active' : ''} onClick={() => setPeriod(value)} key={value}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div><button type="button" onClick={loadReport}>Refresh report</button></div></div>
+    <div className="sales-report-heading"><div><small>OWNER FINANCIAL REPORT</small><h3>Confirmed sales comparison</h3><p>{message}</p></div><div className="sales-heading-actions"><div className="period-toggle source-toggle" aria-label="Booking source">{[{ value: 'all', label: 'All' }, { value: 'online', label: 'Online' }, { value: 'walk_in', label: 'Walk-In' }].map(({ value, label }) => <button type="button" className={reportSource === value ? 'active' : ''} onClick={() => setReportSource(value)} key={value}>{label}</button>)}</div><div className="period-toggle" aria-label="Revenue comparison period">{['day', 'week', 'month'].map((value) => <button type="button" className={period === value ? 'active' : ''} onClick={() => setPeriod(value)} key={value}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div><button type="button" onClick={loadReport}>Refresh report</button></div></div>
     <div className="metric-grid">
       <article><small>{currentLabel}</small><strong>₱{Number(report?.currentRevenue || 0).toLocaleString()}</strong><span>{report?.currentBookings || 0} confirmed booking{report?.currentBookings === 1 ? '' : 's'}</span></article>
       <article><small>{previousLabel}</small><strong>₱{Number(report?.previousRevenue || 0).toLocaleString()}</strong><span>{report?.previousBookings || 0} confirmed booking{report?.previousBookings === 1 ? '' : 's'}</span></article>
@@ -1572,6 +1608,7 @@ function OwnerSalesReport({ session, refreshKey }) {
         <div className="court-sales-grid">{(report?.courtSales || []).map((court) => { const selected = selectedSalesCourts.has(court.courtId); return <article className={selected ? 'court-selected' : 'court-deselected'} key={court.courtId}><div><label className="court-sales-selector"><input type="checkbox" checked={selected} onChange={() => toggleSalesCourt(court.courtId)} /><span aria-hidden="true" /><small>COURT {court.courtId}</small></label><strong>₱{Number(court.currentRevenue || 0).toLocaleString()}</strong></div><span>{court.currentCourtHours || 0} paid court-hour{court.currentCourtHours === 1 ? '' : 's'}</span><div className="court-sales-compare"><span>Previous: ₱{Number(court.previousRevenue || 0).toLocaleString()}</span><b className={court.changePercent >= 0 ? 'up' : 'down'}>{court.changePercent >= 0 ? '+' : ''}{court.changePercent || 0}%</b></div></article>; })}</div>
       </div>
     </section>
+    {reportSource !== 'online' && <section className="walk-in-report"><div><small>WALK-IN BOOKINGS · {currentLabel}</small><h3>Confirmed Walk-In activity</h3></div>{report?.walkInBookings?.length ? <div className="walk-in-report-list">{report.walkInBookings.map((booking) => <article key={booking.id}><div><strong>{booking.trackingNumber}</strong><span>{new Date(booking.confirmedAt).toLocaleString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div><div><strong>{booking.slots.map((slot) => `Court ${slot.courtId}`).join(', ')}</strong><span>{booking.slots.map((slot) => `${new Date(slot.slotStart).toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' })} · ${new Date(slot.slotStart).toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' })}`).join(' · ')}</span></div><div><span>Created by {booking.createdBy}</span><strong>₱{Number(booking.amount || 0).toLocaleString()}</strong></div></article>)}</div> : <p>No confirmed Walk-In bookings in this period.</p>}</section>}
     <article className="chart-card sales-chart"><div className="card-title"><div><small>{historyLabel}</small><h3>{period === 'range' ? 'Daily confirmed revenue' : `${periodName[0].toUpperCase() + periodName.slice(1)}ly confirmed revenue`}</h3></div><span className="chart-badge">OWNER ONLY</span></div><div className="chart-area" style={{ gridTemplateColumns: `repeat(${report?.series?.length || 7}, minmax(52px, 1fr))` }}>{(report?.series || []).map((item) => <div className="bar-wrap" key={item.key}><span>₱{item.revenue.toLocaleString()}</span><div className={`bar ${item.revenue === maximum && item.revenue > 0 ? 'peak' : ''}`} style={{ height: `${Math.max(4, (item.revenue / maximum) * 100)}%` }} /><small>{item.label}</small></div>)}</div></article>
   </section>;
 }
