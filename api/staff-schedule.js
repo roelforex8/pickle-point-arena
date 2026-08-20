@@ -16,7 +16,7 @@ export default async function handler(request, response) {
     if (!Number.isFinite(duration) || duration <= 0 || duration > 8 * 86400000) return sendJson(response, 400, { error: 'Choose a valid schedule range.' });
 
     const [{ data: slots, error: slotError }, { data: blocks, error: blockError }] = await Promise.all([
-      auth.admin.from('booking_slots').select('booking_id, court_id, slot_start, slot_end, status, bookings(tracking_number, customer_name, customer_email, status, hold_expires_at)').gte('slot_start', from.toISOString()).lt('slot_start', to.toISOString()).in('status', ['held', 'payment_submitted', 'confirmed']),
+      auth.admin.from('booking_slots').select('booking_id, court_id, slot_start, slot_end, status, bookings(tracking_number, customer_name, customer_email, status, hold_expires_at, booking_source)').gte('slot_start', from.toISOString()).lt('slot_start', to.toISOString()).in('status', ['held', 'payment_submitted', 'confirmed']),
       auth.admin.from('blocked_slots').select('id, court_id, starts_at, ends_at, reason').lt('starts_at', to.toISOString()).gt('ends_at', from.toISOString()),
     ]);
     if (slotError || blockError) throw slotError || blockError;
