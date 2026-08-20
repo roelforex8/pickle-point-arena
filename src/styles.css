@@ -280,7 +280,7 @@ button { cursor: pointer; }
 .checkout-total { margin-top: 23px; padding: 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; background: var(--forest-dark); color: white; border-radius: 4px; }
 .checkout-total span { font-size: 24px; line-height: 1; font-weight: 900; }
 .checkout-total strong { font-size: clamp(38px, 4vw, 48px); line-height: 1; font-weight: 900; }
-.payment-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.payment-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
 .payment-tabs button { min-height: 58px; padding: 10px; border: 1px solid var(--line); border-radius: 4px; background: #f5f4ef; color: #929792; display: flex; flex-direction: column; gap: 4px; text-align: left; }
 .payment-tabs button.active { background: #e9f2ff; border-color: #4f91df; color: #1767bd; }
 .payment-tabs button:disabled { cursor: not-allowed; opacity: .65; }
@@ -289,6 +289,7 @@ button { cursor: pointer; }
 .qr-payment { margin-top: 17px; padding: 24px; display: grid; grid-template-columns: minmax(220px, 320px) 1fr; gap: 28px; align-items: center; border: 1px solid #cbdcf2; border-radius: 5px; background: #f2f7ff; }
 .qr-frame { width: 100%; max-width: 320px; aspect-ratio: 1; overflow: hidden; display: grid; place-items: center; border-radius: 7px; background: white; border: 12px solid white; box-shadow: 0 8px 25px rgba(26,82,145,.16); }
 .qr-frame img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.bpi-qr-image { display: block; width: 100%; max-width: 320px; height: auto; margin: 0 auto; object-fit: contain; }
 .gcash-label { color: #1767bd; font-size: 8px; font-weight: 900; letter-spacing: .15em; }
 .qr-payment h4 { margin: 10px 0 7px; font-size: 21px; }
 .qr-payment p { color: #6f7b89; font-size: 10px; line-height: 1.5; }
@@ -815,6 +816,7 @@ button { cursor: pointer; }
 .tracking-timestamps span { color: #89928b; font-size: 8px; }
 .tracking-timestamps strong { color: #dce3dd; }
 .continue-payment { margin-top: 18px; }
+.continue-payment .payment-tabs { grid-template-columns: repeat(2, 1fr); }
 .continue-payment > p { color: #f0c3ae; font-size: 9px; line-height: 1.45; }
 .continue-payment > img { width: 150px; max-height: 150px; margin: 8px auto; display: block; object-fit: cover; object-position: top; border: 8px solid white; }
 .continue-payment label { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; color: #abb3ad; font-size: 9px; }

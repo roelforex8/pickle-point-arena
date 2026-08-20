@@ -8,6 +8,8 @@ const allowedTypes = new Map([
   ['image/png', 'png'],
   ['application/pdf', 'pdf'],
 ]);
+const allowedPaymentMethods = new Set(['gcash', 'maya', 'metrobank', 'bpi']);
+const paymentMethodLabels = { gcash: 'GCash', maya: 'Maya', metrobank: 'Metrobank', bpi: 'BPI' };
 
 export function normalizePaymentReference(value) {
   return String(value || '').trim() || 'Not provided';
@@ -53,12 +55,14 @@ export function createPaymentsHandler({
     }
 
     const referenceNumber = normalizePaymentReference(body.referenceNumber);
+    const paymentMethod = String(body.paymentMethod || 'gcash').trim().toLowerCase();
+    if (!allowedPaymentMethods.has(paymentMethod)) return sendJson(response, 400, { error: 'Choose a valid payment method.' });
     const receiptPath = String(body.receiptPath || '');
     if (!receiptPath.startsWith(`${booking.id}/`)) return sendJson(response, 400, { error: 'Upload the payment receipt.' });
 
     const paymentRecord = {
       booking_id: booking.id,
-      method: 'gcash',
+      method: paymentMethod,
       reference_number: referenceNumber,
       receipt_path: receiptPath,
       status: 'pending_verification',
@@ -81,12 +85,12 @@ export function createPaymentsHandler({
     await notify(admin, {
       booking_id: booking.id,
       kind: 'payment_submitted',
-      title: `${booking.tracking_number} · GCash proof uploaded`,
+      title: `${booking.tracking_number} · ${paymentMethodLabels[paymentMethod]} proof uploaded`,
       message: `${booking.customer_name} submitted payment proof for ₱${Number(booking.total_amount).toLocaleString('en-PH')}.`,
     });
     booking.status = 'payment_submitted';
     booking.booking_slots = (booking.booking_slots || []).map((slot) => slot.status === 'held' ? { ...slot, status: 'payment_submitted' } : slot);
-    booking.payments = [{ method: 'gcash', status: 'pending_verification', submitted_at: paymentRecord.submitted_at }];
+    booking.payments = [{ method: paymentMethod, status: 'pending_verification', submitted_at: paymentRecord.submitted_at }];
     console.log('[api/payments] payment proof finalized', { bookingId: booking.id, receiptPath });
     return sendJson(response, 200, { booking: publicBookingPayload(booking) });
   } catch (error) {

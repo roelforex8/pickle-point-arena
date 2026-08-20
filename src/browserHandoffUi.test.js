@@ -3,8 +3,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const appSource = await readFile(new URL('./App.jsx', import.meta.url), 'utf8');
+const stylesSource = await readFile(new URL('./styles.css', import.meta.url), 'utf8');
 const promptSource = await readFile(new URL('./InAppBrowserHandoff.jsx', import.meta.url), 'utf8');
 const pickerSource = await readFile(new URL('./ReceiptFilePicker.jsx', import.meta.url), 'utf8');
+const bpiQr = await readFile(new URL('../public/bpi-qr.png', import.meta.url));
 
 test('User-Agent detection is presentation-only and public prompt rendering is conditional', () => {
   assert.match(appSource, /shouldShowBrowserHandoff/);
@@ -56,6 +58,21 @@ test('both customer upload paths retain validation and expose removal without ch
   assert.match(appSource, /if \(!paymentReady \|\| bookingSubmitting\) return;/);
   assert.match(appSource, /disabled=\{!paymentReady \|\| bookingSubmitting\}/);
   assert.match(appSource, /disabled=\{proofSubmitting \|\| !receiptFile\}/);
+});
+
+test('BPI renders conditionally and shares the existing pending receipt workflow', () => {
+  assert.match(appSource, /<strong>GCash<\/strong><small>Available now<\/small>[\s\S]+<strong>Maya<\/strong><small>Coming soon<\/small>[\s\S]+<strong>Metrobank<\/strong><small>Coming soon<\/small>[\s\S]+<strong>BPI<\/strong><small>Available now<\/small>/);
+  assert.match(appSource, /<strong>BPI<\/strong><small>Available now<\/small>/);
+  assert.match(appSource, /<button type="button" disabled><strong>Maya/);
+  assert.match(appSource, /<button type="button" disabled><strong>Metrobank/);
+  assert.match(appSource, /selectedPaymentMethod === 'bpi'/);
+  assert.match(appSource, /src="\/bpi-qr\.png"/);
+  assert.match(appSource, /src="\/gcash-qr-hd\.png"/);
+  assert.match(appSource, /Scan the BPI QR code to pay/);
+  assert.match(appSource, /paymentMethod: selectedPaymentMethod/);
+  assert.match(stylesSource, /\.payment-tabs \{[^}]*grid-template-columns: repeat\(4, 1fr\)/);
+  assert.ok(bpiQr.length > 0);
+  assert.doesNotMatch(appSource, /setCheckoutStage\(['"](?:confirmed|verified|paid)['"]\)/);
 });
 
 test('payment preparation occurs only inside explicit submit handlers', () => {
