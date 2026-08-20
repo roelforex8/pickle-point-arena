@@ -40,3 +40,26 @@ test('owner report exposes All, Online, and Walk-In source controls and details'
   assert.match(appSource, /report\.walkInBookings\.map/);
   assert.match(appSource, /Created by \{booking\.createdBy\}/);
 });
+
+test('Walk-In cancellation is explicit, source-aware, and shows the complete schedule', () => {
+  assert.match(appSource, /selectedBooking\.status === 'walkIn'[\s\S]+>Cancel Walk-In<\/button>/);
+  assert.match(appSource, /selectedBooking\.status === 'booked'[\s\S]+>Cancel booking<\/button>/);
+  assert.match(appSource, /Cancel this Walk-In booking\?/);
+  assert.match(appSource, /walkInCancelTarget\.tracking/);
+  assert.match(appSource, /walkInCancelTarget\.amount\.toLocaleString\(\)/);
+  assert.match(appSource, /walkInCancellationSchedule\.map/);
+  assert.match(appSource, /walkInCancelTarget\.slots\.length/);
+  assert.match(appSource, /All court-hours under this Walk-In booking will become available again/);
+  assert.match(appSource, /postStaffWalkInCancellation\(supabase, walkInCancelTarget\.bookingId\)/);
+  assert.match(styleSource, /\.walk-in-cancel-modal/);
+});
+
+test('cancelled Walk-In slots disappear from both active schedule surfaces without public metadata', () => {
+  assert.match(staffScheduleSource, /\.in\('status', \['held', 'payment_submitted', 'confirmed'\]\)/);
+  assert.match(publicAvailabilitySource, /visibleStatuses = new Set\(\['held', 'payment_submitted', 'confirmed'\]\)/);
+  assert.doesNotMatch(publicAvailabilitySource, /booking_source|walk_in|Walk-In|cancelled_by/);
+});
+
+test('staff schedule includes full Walk-In details for multi-slot cancellation review', () => {
+  assert.match(staffScheduleSource, /booking_source, total_amount, booking_slots\(court_id, slot_start, slot_end, status\)/);
+});
