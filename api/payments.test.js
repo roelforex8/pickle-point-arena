@@ -77,6 +77,44 @@ test('blank reference finalizes without inserting an empty or null database valu
 
   assert.equal(response.statusCode, 200);
   assert.equal(calls.paymentRecord.reference_number, 'Not provided');
+  assert.equal(calls.paymentRecord.method, 'gcash');
+});
+
+test('supported payment methods are stored in pending verification', async (t) => {
+  for (const paymentMethod of ['gcash', 'maya', 'metrobank', 'bpi']) {
+    await t.test(paymentMethod, async () => {
+      const { admin, calls } = fakeAdmin();
+      const handler = createPaymentsHandler({
+        getAdmin: () => admin,
+        findBooking: async () => booking(),
+        notify: async () => {},
+      });
+      const response = responseRecorder();
+
+      await handler({ method: 'PUT', body: { paymentMethod, receiptPath: 'fake-booking-id/fake-receipt.png' } }, response);
+
+      assert.equal(response.statusCode, 200);
+      assert.equal(calls.paymentRecord.method, paymentMethod);
+      assert.equal(calls.paymentRecord.status, 'pending_verification');
+      assert.equal(response.body.booking.status, 'payment_submitted');
+      assert.equal(response.body.booking.payment.status, 'pending_verification');
+    });
+  }
+});
+
+test('invalid payment methods are rejected without creating a payment', async () => {
+  const { admin, calls } = fakeAdmin();
+  const handler = createPaymentsHandler({
+    getAdmin: () => admin,
+    findBooking: async () => booking(),
+    notify: async () => {},
+  });
+  const response = responseRecorder();
+
+  await handler({ method: 'PUT', body: { paymentMethod: 'verified', receiptPath: 'fake-booking-id/fake-receipt.png' } }, response);
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(calls.paymentRecord, null);
 });
 
 test('payment insertion failure removes the newly uploaded object and hides database details', async () => {

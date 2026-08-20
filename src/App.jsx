@@ -219,7 +219,7 @@ async function prepareReceiptUpload(file) {
   return { file: convertedFile, mimeType: 'image/jpeg' };
 }
 
-async function uploadPaymentProof({ lookupMethod, lookupValue, referenceNumber, file }) {
+async function uploadPaymentProof({ lookupMethod, lookupValue, paymentMethod = 'gcash', referenceNumber, file }) {
   const preparedUpload = await prepareReceiptUpload(file);
   let prepareResponse;
   try {
@@ -247,7 +247,7 @@ async function uploadPaymentProof({ lookupMethod, lookupValue, referenceNumber, 
     finalizeResponse = await fetch('/api/payments', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lookupMethod, lookupValue, referenceNumber, receiptPath: prepared.path }),
+      body: JSON.stringify({ lookupMethod, lookupValue, paymentMethod, referenceNumber, receiptPath: prepared.path }),
     });
   } catch {
     throw new Error('The upload could not be finalized. Check your connection and try again.');
@@ -457,6 +457,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerMobile, setCustomerMobile] = useState('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('gcash');
   const [paymentReference, setPaymentReference] = useState('');
   const [proofFile, setProofFile] = useState(null);
   const [trackingNumber, setTrackingNumber] = useState('');
@@ -706,7 +707,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
     setSelectionMessage('');
     setCheckoutMessage('');
     try {
-      const booking = await uploadPaymentProof({ lookupMethod: 'tracking', lookupValue: trackingNumber, referenceNumber: paymentReference, file: proofFile });
+      const booking = await uploadPaymentProof({ lookupMethod: 'tracking', lookupValue: trackingNumber, paymentMethod: selectedPaymentMethod, referenceNumber: paymentReference, file: proofFile });
       const completedTracking = booking.trackingNumber || trackingNumber;
       const submittedAt = booking.payment?.submittedAt || new Date().toISOString();
       setRecentSubmissions((current) => [{ trackingNumber: completedTracking, submittedAt, totalAmount: booking.totalAmount || checkoutTotal, customerName, courtHours: checkoutSelection.length }, ...current].slice(0, 5));
@@ -714,6 +715,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       setBookingRecord(null);
       setSelectedSlots(new Set());
       setTrackingNumber('');
+      setSelectedPaymentMethod('gcash');
       setPaymentReference('');
       setProofFile(null);
       setCheckoutSelection([]);
@@ -816,13 +818,13 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
             </div>
           </div>
           <div className="payment-stage">
-            <div className="payment-choice"><span className="step-number">02</span><h4>Payment method</h4><div className="payment-tabs"><button className="active"><strong>GCash</strong><small>Available now</small></button><button disabled><strong>Maya</strong><small>Coming soon</small></button><button disabled><strong>Metrobank</strong><small>Coming soon</small></button></div><div className="qr-payment"><div className="qr-frame"><img src="/gcash-qr-hd.png" alt="High-resolution GCash QR code for Pickle Point Arena payment" /></div><div><span className="gcash-label">GCASH PAYMENT</span><h4>Scan and pay ₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</h4><p>Enter the exact amount shown. Transfer fees may apply.</p><a href="/gcash-qr-hd.png" download="Pickle-Point-Arena-GCash-QR.png">↓ Download GCash QR</a></div></div></div>
+            <div className="payment-choice"><span className="step-number">02</span><h4>Payment method</h4><div className="payment-tabs"><button type="button" className={selectedPaymentMethod === 'gcash' ? 'active' : ''} onClick={() => setSelectedPaymentMethod('gcash')}><strong>GCash</strong><small>Available now</small></button><button type="button" disabled><strong>Maya</strong><small>Coming soon</small></button><button type="button" disabled><strong>Metrobank</strong><small>Coming soon</small></button><button type="button" className={selectedPaymentMethod === 'bpi' ? 'active' : ''} onClick={() => setSelectedPaymentMethod('bpi')}><strong>BPI</strong><small>Available now</small></button></div>{selectedPaymentMethod === 'bpi' ? <div className="qr-payment"><div className="qr-frame"><img className="bpi-qr-image" src="/bpi-qr.png" alt="BPI QR code for Pickle Point Arena payment" /></div><div><span className="gcash-label">BPI PAYMENT</span><h4>Scan the BPI QR code to pay</h4><p>Pay exactly ₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}. Transfer fees may apply.</p><a href="/bpi-qr.png" download="Pickle-Point-Arena-BPI-QR.png">↓ Download BPI QR</a></div></div> : <div className="qr-payment"><div className="qr-frame"><img src="/gcash-qr-hd.png" alt="High-resolution GCash QR code for Pickle Point Arena payment" /></div><div><span className="gcash-label">GCASH PAYMENT</span><h4>Scan and pay ₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</h4><p>Enter the exact amount shown. Transfer fees may apply.</p><a href="/gcash-qr-hd.png" download="Pickle-Point-Arena-GCash-QR.png">↓ Download GCash QR</a></div></div>}</div>
             <div className="proof-form"><span className="step-number">03</span><h4>Submit payment proof</h4><label>Reference number<input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="(optional)" /></label><ReceiptFilePicker id="checkout-receipt-file" file={proofFile} browserInfo={browserInfo} onFileRemove={() => { setProofFile(null); setCheckoutMessage(''); }} onFileChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setProofFile(file); setCheckoutMessage(''); } catch (error) { setProofFile(null); setCheckoutMessage(error.message); event.target.value = ''; } }} />{checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}<p>HEIC, HEIF, and WebP phone images are converted securely to JPEG before upload. The receipt is stored privately for Owner/Admin review.</p><div className="payment-summary"><span>Customer</span><strong>{customerName}</strong><span>Tracking</span><strong>{trackingNumber}</strong><span>Amount</span><strong>₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</strong></div></div>
           </div>
           <div className="checkout-footer"><span className="hold-notice">Reserved until {bookingRecord?.holdExpiresAt ? new Date(bookingRecord.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }) : '—'}</span><button className="primary" disabled={!paymentReady || bookingSubmitting} onClick={submitPaymentProof}>{bookingSubmitting ? 'Uploading securely…' : 'Submit payment proof'} <span>→</span></button></div>
         </>}
 
-        {checkoutStage === 'submitted' && <div className="status-result pending-result"><span className="result-icon">✓</span><span className="step-number">PAYMENT SUBMITTED — PENDING VERIFICATION</span><h4>Your payment proof is with the venue.</h4><p>The Owner or Admin can now open the receipt and confirm or reject this booking from the private portal. Use Track Booking to check for updates.</p><div className="tracking-number"><small>TRACKING NUMBER</small><strong>{trackingNumber}</strong><button onClick={() => navigator.clipboard?.writeText(trackingNumber)}>Copy</button></div><div className="confirmed-details"><span>Amount submitted<strong>₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</strong></span><span>Payment method<strong>GCash</strong></span><span>Status<strong>Pending verification</strong></span></div></div>}
+        {checkoutStage === 'submitted' && <div className="status-result pending-result"><span className="result-icon">✓</span><span className="step-number">PAYMENT SUBMITTED — PENDING VERIFICATION</span><h4>Your payment proof is with the venue.</h4><p>The Owner or Admin can now open the receipt and confirm or reject this booking from the private portal. Use Track Booking to check for updates.</p><div className="tracking-number"><small>TRACKING NUMBER</small><strong>{trackingNumber}</strong><button onClick={() => navigator.clipboard?.writeText(trackingNumber)}>Copy</button></div><div className="confirmed-details"><span>Amount submitted<strong>₱{(bookingRecord?.totalAmount || checkoutTotal).toLocaleString()}</strong></span><span>Payment method<strong>{selectedPaymentMethod === 'bpi' ? 'BPI' : 'GCash'}</strong></span><span>Status<strong>Pending verification</strong></span></div></div>}
         </section>
         </div>}
       </>}
@@ -939,6 +941,7 @@ function TrackingPreview({ initialBooking = null, browserInfo }) {
   const [lookupMessage, setLookupMessage] = useState('');
   const [lookupLoading, setLookupLoading] = useState(false);
   const [booking, setBooking] = useState(initialBooking);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('gcash');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [receiptFile, setReceiptFile] = useState(null);
   const [proofSubmitting, setProofSubmitting] = useState(false);
@@ -974,7 +977,7 @@ function TrackingPreview({ initialBooking = null, browserInfo }) {
     setProofSubmitting(true);
     setLookupMessage('');
     try {
-      const updated = await uploadPaymentProof({ lookupMethod, lookupValue, referenceNumber, file: receiptFile });
+      const updated = await uploadPaymentProof({ lookupMethod, lookupValue, paymentMethod: selectedPaymentMethod, referenceNumber, file: receiptFile });
       setBooking(updated);
       setLookupMessage('Payment proof submitted successfully.');
     } catch (error) {
@@ -987,6 +990,7 @@ function TrackingPreview({ initialBooking = null, browserInfo }) {
     setLookupMethod(method);
     setLookupValue('');
     setBooking(null);
+    setSelectedPaymentMethod('gcash');
     setLookupMessage('');
   };
 
@@ -1010,8 +1014,9 @@ function TrackingPreview({ initialBooking = null, browserInfo }) {
         {booking && <CustomerBookingSummary booking={booking} location="Guinoyuran Rd, Valencia City, Bukidnon, Philippines" onBack={() => { setBooking(null); setLookupMessage(''); }}>
           {booking.status === 'awaiting_payment' && <div className="continue-payment">
             <p>Upload payment before {new Date(booking.holdExpiresAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })} to keep the reservation.</p>
-            <img src="/gcash-qr-hd.png" alt="GCash QR code" />
-            <label>GCash reference number<input value={referenceNumber} onChange={(event) => setReferenceNumber(event.target.value)} placeholder="(optional)" /></label>
+            <div className="payment-tabs"><button type="button" className={selectedPaymentMethod === 'gcash' ? 'active' : ''} onClick={() => setSelectedPaymentMethod('gcash')}><strong>GCash</strong><small>Available now</small></button><button type="button" className={selectedPaymentMethod === 'bpi' ? 'active' : ''} onClick={() => setSelectedPaymentMethod('bpi')}><strong>BPI</strong><small>Available now</small></button></div>
+            {selectedPaymentMethod === 'bpi' ? <><h4>Scan the BPI QR code to pay</h4><img className="bpi-qr-image" src="/bpi-qr.png" alt="BPI QR code" /></> : <img src="/gcash-qr-hd.png" alt="GCash QR code" />}
+            <label>{selectedPaymentMethod === 'bpi' ? 'BPI' : 'GCash'} reference number<input value={referenceNumber} onChange={(event) => setReferenceNumber(event.target.value)} placeholder="(optional)" /></label>
             <ReceiptFilePicker id="tracking-receipt-file" file={receiptFile} browserInfo={browserInfo} onFileRemove={() => { setReceiptFile(null); setLookupMessage(''); }} onFileChange={(event) => { const file = event.target.files?.[0] || null; try { if (file) validateReceiptFile(file); setReceiptFile(file); setLookupMessage(''); } catch (error) { setReceiptFile(null); setLookupMessage(error.message); event.target.value = ''; } }} />
             <button type="button" className="primary full" disabled={proofSubmitting || !receiptFile} onClick={continuePayment}>{proofSubmitting ? 'Uploading…' : 'Submit payment proof'}</button>
           </div>}
