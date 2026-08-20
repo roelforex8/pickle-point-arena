@@ -1076,6 +1076,16 @@ button { cursor: pointer; }
 .cancel-booking-modal input { min-height: 48px; padding: 0 12px; border: 1px solid #d7dcd7; border-radius: 3px; font-size: 18px; letter-spacing: .3em; }
 .cancel-booking-modal .cancel-error { color: var(--orange); font-weight: 800; }
 .confirm-cancellation { width: 100%; min-height: 44px; margin-top: 14px; border: 0; border-radius: 3px; background: var(--orange); color: white; font-size: 9px; font-weight: 900; }
+.walk-in-cancel-modal > div { width: min(560px, 94vw); }
+.walk-in-cancel-schedule { max-height: 280px; margin: 16px 0; display: grid; gap: 8px; overflow-y: auto; }
+.walk-in-cancel-schedule section { padding: 11px 12px; border: 1px solid var(--line); border-radius: 3px; background: #f8f8f5; }
+.walk-in-cancel-schedule section > strong { display: block; margin-bottom: 7px; font-size: 11px; }
+.walk-in-cancel-schedule section > div { padding: 5px 0; display: flex; justify-content: space-between; gap: 12px; }
+.walk-in-cancel-schedule span { font-size: 10px; font-weight: 900; }
+.walk-in-cancel-schedule small { color: #697069; font: 700 9px sans-serif; letter-spacing: 0; text-align: right; }
+.walk-in-cancel-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.walk-in-cancel-actions button { min-height: 44px; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--forest); font-size: 9px; font-weight: 900; }
+.walk-in-cancel-actions .confirm-cancellation { margin-top: 0; border-color: var(--orange); background: var(--orange); color: white; }
 .admin-pin-modal > form { position: relative; width: min(440px, 94vw); padding: 28px; border-radius: 6px; background: white; box-shadow: 0 30px 80px rgba(0,0,0,.4); }
 .admin-pin-modal .modal-close { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border: 0; background: transparent; font-size: 20px; }
 .admin-pin-modal > form > small { color: var(--orange); font: 800 8px monospace; letter-spacing: .13em; }

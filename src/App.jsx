@@ -10,7 +10,7 @@ import { detectFacebookInAppBrowser, shouldShowBrowserHandoff } from './browserH
 import { detectReceiptMimeType, validateReceiptFile } from './receiptUpload';
 import { changeOwnerPassword } from './ownerPassword';
 import { postStaffBlocks } from './staffBlocks';
-import { postStaffWalkIn, walkInBookingSummary } from './walkInBooking';
+import { postStaffWalkIn, postStaffWalkInCancellation, walkInBookingSummary } from './walkInBooking';
 
 const courtNames = ['Court 1', 'Court 2', 'Court 3', 'Court 4', 'Court 5', 'Court 6'];
 const courtGalleryPhotos = [
@@ -1184,6 +1184,9 @@ function OperationsCalendar({ selectedDate, setSelectedDate, refreshKey, role, s
   const [walkInReviewOpen, setWalkInReviewOpen] = useState(false);
   const [walkInSubmitting, setWalkInSubmitting] = useState(false);
   const [walkInMessage, setWalkInMessage] = useState('');
+  const [walkInCancelTarget, setWalkInCancelTarget] = useState(null);
+  const [walkInCancelSubmitting, setWalkInCancelSubmitting] = useState(false);
+  const [walkInCancelMessage, setWalkInCancelMessage] = useState('');
   const loadRequestRef = useRef(0);
   const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => { const day = new Date(weekStart); day.setDate(weekStart.getDate() + index); return day; }), [weekStart]);
@@ -1318,10 +1321,45 @@ function OperationsCalendar({ selectedDate, setSelectedDate, refreshKey, role, s
     setCancelSubmitting(false);
   };
 
+  const openWalkInCancellation = () => {
+    const row = selectedBooking?.row;
+    const booking = Array.isArray(row?.bookings) ? row.bookings[0] : row?.bookings;
+    if (!row?.booking_id || booking?.booking_source !== 'walk_in') return;
+    const slots = (booking.booking_slots || []).filter((slot) => ['held', 'payment_submitted', 'confirmed'].includes(slot.status));
+    setWalkInCancelMessage('');
+    setWalkInCancelTarget({
+      bookingId: row.booking_id,
+      tracking: booking.tracking_number,
+      amount: Number(booking.total_amount || 0),
+      slots: slots.length ? slots : [{ court_id: row.court_id, slot_start: row.slot_start, slot_end: row.slot_end }],
+    });
+  };
+
+  const cancelWalkInBooking = async () => {
+    if (!walkInCancelTarget?.bookingId || walkInCancelSubmitting) return;
+    setWalkInCancelSubmitting(true);
+    setWalkInCancelMessage('');
+    try {
+      const response = await postStaffWalkInCancellation(supabase, walkInCancelTarget.bookingId);
+      const result = await response.json();
+      if (!response.ok) return setWalkInCancelMessage(result.error || 'The Walk-In booking could not be cancelled.');
+      setWalkInCancelTarget(null);
+      setSelectedBooking(null);
+      setCalendarMessage(`${result.booking?.trackingNumber || 'Walk-In'} cancelled. All court-hours were released.`);
+      await loadSchedule();
+      onChanged?.();
+    } catch (error) {
+      setWalkInCancelMessage(error.message || 'The Walk-In booking could not be cancelled.');
+    } finally {
+      setWalkInCancelSubmitting(false);
+    }
+  };
+
   const selectedAvailable = [...availabilitySelections.values()].filter((item) => item.status === 'available').length;
   const selectedBlocked = [...availabilitySelections.values()].filter((item) => item.status === 'blocked').length;
   const walkInSelections = [...availabilitySelections.values()].filter((item) => item.status === 'available');
   const walkInSummary = walkInBookingSummary(walkInSelections);
+  const walkInCancellationSchedule = groupBookingSlots(walkInCancelTarget?.slots || []);
 
   const openWalkInReview = () => {
     if (!walkInSelections.length) return setCalendarMessage('Select at least one available court-hour for the Walk-In booking.');
@@ -1354,9 +1392,10 @@ function OperationsCalendar({ selectedDate, setSelectedDate, refreshKey, role, s
     {scheduleOpen && <div className="operations-calendar-content"><label className="operations-date-picker">Date<input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></label><div className="week-strip operations-week">{weekDays.map((day) => <button key={dateKey(day)} className={dateKey(day) === selectedDate ? 'active' : ''} onClick={() => setSelectedDate(dateKey(day))}><small>{day.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}</small><strong>{day.getDate()}</strong></button>)}</div>
     <div className="schedule-wrap operations-schedule"><table className="schedule-table"><thead><tr><th>TIME</th>{courtNames.map((court) => <th key={court}>{court}</th>)}</tr></thead><tbody>{hours.map((hour) => <tr key={hour}><th>{timeRange(hour)}</th>{courtNames.map((court, courtIndex) => { const { status } = getSlotData(hour, courtIndex); const isPast = status === 'past'; const availabilityKey = `${selectedDate}|${hour}|${courtIndex + 1}`; const chosen = availabilitySelections.has(availabilityKey); return <td key={court}><button className={`slot ${status} ${chosen ? 'staff-selected' : ''}`} disabled={isPast} onClick={() => { if (isPast) return; if (status === 'available' || status === 'blocked') toggleAvailabilityCell(hour, courtIndex, status); else inspectSlot(hour, courtIndex); }} aria-pressed={chosen} aria-label={`${court}, ${timeRange(hour)}, ${statusDetails[status].label}`}><span>{chosen ? 'SELECTED' : statusDetails[status].short}</span></button></td>; })}</tr>)}</tbody></table></div>
     {availabilitySelections.size > 0 && <div className="availability-batch"><div><small>BATCH AVAILABILITY</small><strong>{availabilitySelections.size} court-hour{availabilitySelections.size === 1 ? '' : 's'} selected across one or more days</strong><span>{selectedAvailable} available · {selectedBlocked} blocked</span></div><label>Blocking reason<select value={availabilityReason} onChange={(event) => setAvailabilityReason(event.target.value)}><option>Maintenance</option><option>Private event</option><option>Weather</option><option>Venue closure</option></select></label><button type="button" className="walk-in-selected" disabled={availabilitySubmitting || walkInSubmitting || !selectedAvailable} onClick={openWalkInReview}>Walk-In</button><button type="button" className="block-selected" disabled={availabilitySubmitting || walkInSubmitting || !selectedAvailable} onClick={() => changeAvailability('block')}>Block selected</button><button type="button" className="unblock-selected" disabled={availabilitySubmitting || walkInSubmitting || !selectedBlocked} onClick={() => changeAvailability('unblock')}>Unblock selected</button><button type="button" className="clear-selected" disabled={availabilitySubmitting || walkInSubmitting} onClick={() => setAvailabilitySelections(new Map())}>Clear</button></div>}
-    {selectedBooking && <div className="booking-inspector"><span className={`inspector-status ${selectedBooking.status}`}>{statusDetails[selectedBooking.status].short}</span><div><small>SELECTED SLOT</small><strong>{courtNames[selectedBooking.courtIndex]} · {timeRange(selectedBooking.hour)}</strong><p>{selectedBooking.status === 'past' ? (selectedBooking.row ? `${selectedBooking.row?.bookings?.tracking_number || 'Historical booking'} · ${selectedBooking.row?.bookings?.customer_name || 'Customer'}` : 'This hour has already passed and is no longer bookable.') : selectedBooking.status === 'available' ? 'This slot is open for customer booking.' : selectedBooking.status === 'blocked' ? `Blocked by venue: ${selectedBooking.block?.reason || 'Unavailable'}.` : `${selectedBooking.row?.bookings?.tracking_number || 'Booking'} · ${selectedBooking.row?.bookings?.customer_name || 'Customer'}`}</p></div>{role === 'owner' && ['booked', 'walkIn'].includes(selectedBooking.status) && <button className="cancel-booking-button" type="button" onClick={() => setCancelTarget({ bookingId: selectedBooking.row?.booking_id, tracking: selectedBooking.row?.bookings?.tracking_number })}>Cancel booking</button>}<button className="close-inspector" onClick={() => setSelectedBooking(null)}>×</button></div>}
+    {selectedBooking && <div className="booking-inspector"><span className={`inspector-status ${selectedBooking.status}`}>{statusDetails[selectedBooking.status].short}</span><div><small>SELECTED SLOT</small><strong>{courtNames[selectedBooking.courtIndex]} · {timeRange(selectedBooking.hour)}</strong><p>{selectedBooking.status === 'past' ? (selectedBooking.row ? `${selectedBooking.row?.bookings?.tracking_number || 'Historical booking'} · ${selectedBooking.row?.bookings?.customer_name || 'Customer'}` : 'This hour has already passed and is no longer bookable.') : selectedBooking.status === 'available' ? 'This slot is open for customer booking.' : selectedBooking.status === 'blocked' ? `Blocked by venue: ${selectedBooking.block?.reason || 'Unavailable'}.` : `${selectedBooking.row?.bookings?.tracking_number || 'Booking'} · ${selectedBooking.row?.bookings?.customer_name || 'Customer'}`}</p></div>{selectedBooking.status === 'walkIn' && <button className="cancel-booking-button" type="button" onClick={openWalkInCancellation}>Cancel Walk-In</button>}{role === 'owner' && selectedBooking.status === 'booked' && <button className="cancel-booking-button" type="button" onClick={() => setCancelTarget({ bookingId: selectedBooking.row?.booking_id, tracking: selectedBooking.row?.bookings?.tracking_number })}>Cancel booking</button>}<button className="close-inspector" onClick={() => setSelectedBooking(null)}>×</button></div>}
     <p className="operations-note">{calendarMessage} · reconciles every 5 seconds.</p></div>}
     {cancelTarget && <div className="cancel-booking-modal" role="dialog" aria-modal="true" aria-label="Cancel confirmed booking"><div><button className="modal-close" type="button" onClick={() => setCancelTarget(null)}>×</button><small>OWNER CANCELLATION</small><h3>Cancel {cancelTarget.tracking || 'this booking'}?</h3><p>This releases every court slot in the confirmed booking. Enter your four-digit Owner PIN to continue.</p><label>Cancellation PIN<PasswordInput inputMode="numeric" maxLength="4" value={cancelPin} onChange={(event) => setCancelPin(event.target.value.replace(/\D/g, '').slice(0, 4))} autoComplete="off" autoFocus /></label>{cancelMessage && <p className="cancel-error">{cancelMessage}</p>}<button className="confirm-cancellation" type="button" onClick={cancelConfirmedBooking} disabled={cancelSubmitting}>{cancelSubmitting ? 'Cancelling…' : 'Cancel confirmed booking'}</button></div></div>}
+    {walkInCancelTarget && <div className="cancel-booking-modal walk-in-cancel-modal" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !walkInCancelSubmitting) setWalkInCancelTarget(null); }}><div role="dialog" aria-modal="true" aria-labelledby="walk-in-cancel-title"><button className="modal-close" type="button" aria-label="Close Walk-In cancellation" disabled={walkInCancelSubmitting} onClick={() => setWalkInCancelTarget(null)}>×</button><small>WALK-IN CANCELLATION</small><h3 id="walk-in-cancel-title">Cancel this Walk-In booking?</h3><p><strong>{walkInCancelTarget.tracking}</strong> · ₱{walkInCancelTarget.amount.toLocaleString()}</p><div className="walk-in-cancel-schedule">{walkInCancellationSchedule.map((dateGroup) => <section key={dateGroup.dateKey}><strong>{dateGroup.dateLabel}</strong>{dateGroup.courts.map((court) => <div key={court.courtId}><span>Court {court.courtId}</span><small>{court.ranges.map((range) => `${range.startTime}–${range.endTime}`).join(', ')}</small></div>)}</section>)}</div><p><strong>{walkInCancelTarget.slots.length} court-hour{walkInCancelTarget.slots.length === 1 ? '' : 's'}</strong> will be released. All court-hours under this Walk-In booking will become available again unless another venue block applies.</p>{walkInCancelMessage && <p className="cancel-error" role="alert">{walkInCancelMessage}</p>}<div className="walk-in-cancel-actions"><button type="button" disabled={walkInCancelSubmitting} onClick={() => setWalkInCancelTarget(null)}>Keep booking</button><button className="confirm-cancellation" type="button" disabled={walkInCancelSubmitting} onClick={cancelWalkInBooking}>{walkInCancelSubmitting ? 'Cancelling…' : 'Cancel Walk-In'}</button></div></div></div>}
     {walkInReviewOpen && <div className="walk-in-modal" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !walkInSubmitting) setWalkInReviewOpen(false); }}><section role="dialog" aria-modal="true" aria-labelledby="walk-in-review-title"><button className="modal-close" type="button" aria-label="Close Walk-In review" disabled={walkInSubmitting} onClick={() => setWalkInReviewOpen(false)}>×</button><small>ADMIN WALK-IN</small><h3 id="walk-in-review-title">Review Walk-In booking</h3><p>Confirm these available court-hours as a paid physical transaction. No QR receipt is required.</p><div className="walk-in-slots">{walkInSummary.items.map((item) => <div key={`${item.date}|${item.hour}|${item.courtId}`}><span><strong>{courtNames[item.courtId - 1]}</strong><small>{new Date(`${item.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · {timeRange(item.hour)}</small></span><b>₱{item.hourlyRate.toLocaleString()}</b></div>)}</div><div className="walk-in-totals"><span>Court-hours<strong>{walkInSummary.courtHours}</strong></span><span>Subtotal<strong>₱{walkInSummary.subtotal.toLocaleString()}</strong></span><span>Booking fee<strong>₱0</strong></span><span>Total amount<strong>₱{walkInSummary.totalAmount.toLocaleString()}</strong></span></div>{walkInMessage && <p className="walk-in-error" role="alert">{walkInMessage}</p>}<div className="walk-in-actions"><button type="button" disabled={walkInSubmitting} onClick={() => setWalkInReviewOpen(false)}>Back</button><button className="confirm-walk-in" type="button" disabled={walkInSubmitting} onClick={confirmWalkInBooking}>{walkInSubmitting ? 'Confirming…' : 'Confirm Walk-In booking'}</button></div></section></div>}
   </section>;
 }

@@ -128,3 +128,24 @@ test('migration keeps Walk-In creation atomic, locked, confirmed, and service-ro
 test('online booking fee calculation remains unchanged', () => {
   assert.match(onlineBookingSource, /const bookingFee = pricedSlots\.length \* 10;/);
 });
+
+test('one parent Walk-In supports consecutive, non-consecutive, and multiple-court slots atomically', async () => {
+  const selections = [
+    { date: '2099-01-15', hour: 8, courtId: 1 },
+    { date: '2099-01-15', hour: 9, courtId: 1 },
+    { date: '2099-01-15', hour: 11, courtId: 1 },
+    { date: '2099-01-15', hour: 9, courtId: 2 },
+  ];
+  const subject = authenticatedSubject();
+  const handler = createStaffWalkInsHandler({ requireStaffFn: async () => subject.auth });
+  const response = responseRecorder();
+  await handler({ method: 'POST', body: { selections }, headers: {} }, response);
+  assert.equal(response.statusCode, 201);
+  assert.deepEqual(subject.calls.rpc[0].payload.p_slots.map((slot) => ({ courtId: slot.court_id, start: slot.slot_start })), [
+    { courtId: 1, start: '2099-01-15T00:00:00.000Z' },
+    { courtId: 1, start: '2099-01-15T01:00:00.000Z' },
+    { courtId: 1, start: '2099-01-15T03:00:00.000Z' },
+    { courtId: 2, start: '2099-01-15T01:00:00.000Z' },
+  ]);
+  assert.match(migrationSource, /for v_item in[\s\S]+insert into public\.booking_slots[\s\S]+v_subtotal := v_subtotal \+ v_rate;/i);
+});

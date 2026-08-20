@@ -30,3 +30,16 @@ test('reports count confirmed bookings only and never query blocked slots as rev
   assert.match(reportSource, /\.eq\('status', 'confirmed'\)/);
   assert.doesNotMatch(reportSource, /from\('blocked_slots'\)/);
 });
+
+test('cancelled Walk-In records are excluded from active revenue and court usage', () => {
+  const activeConfirmed = [
+    { booking_source: 'online', status: 'confirmed', total_amount: 310, booking_slots: [{}] },
+    { booking_source: 'walk_in', status: 'confirmed', total_amount: 650, booking_slots: [{}, {}] },
+    { booking_source: 'walk_in', status: 'cancelled', total_amount: 1000, booking_slots: [{}, {}, {}] },
+  ].filter((booking) => booking.status === 'confirmed');
+  assert.deepEqual(bookingSourceTotals(activeConfirmed), {
+    all: { bookingCount: 2, revenue: 960, courtHours: 3 },
+    online: { bookingCount: 1, revenue: 310, courtHours: 1 },
+    walkIn: { bookingCount: 1, revenue: 650, courtHours: 2 },
+  });
+});
