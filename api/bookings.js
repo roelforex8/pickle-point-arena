@@ -16,6 +16,19 @@ function courtRate(slotStart) {
   return hour >= 6 && hour < 16 ? 300 : 350;
 }
 
+export function publicBookingRpcError(error) {
+  if (/occupancy_conflict|no longer available|already booked|blocked|booking_slots_active_unique|duplicate key|unique constraint/i.test(error?.message || '')) {
+    return {
+      status: 409,
+      message: 'One or more selected court-hours are no longer available. Nothing was booked.',
+    };
+  }
+  return {
+    status: 400,
+    message: 'The booking request could not be completed. Please review the selected court-hours and try again.',
+  };
+}
+
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
     response.setHeader('Allow', 'POST');
@@ -43,7 +56,10 @@ export default async function handler(request, response) {
       }
     })) return sendJson(response, 400, { error: 'Bookings are available from 6:00 AM to 12:00 AM Philippine time.' });
     const { data, error } = await admin.rpc('create_public_booking', { p_customer_name: customerName, p_customer_email: customerEmail, p_slots: slots });
-    if (error) return sendJson(response, 400, { error: error.message });
+    if (error) {
+      const safeError = publicBookingRpcError(error);
+      return sendJson(response, safeError.status, { error: safeError.message });
+    }
     const booking = data?.[0];
     if (!booking) throw new Error('The reservation was not created.');
     createdBookingId = booking.booking_id;
@@ -91,6 +107,6 @@ export default async function handler(request, response) {
         admin.from('bookings').update({ status: 'expired' }).eq('id', createdBookingId).eq('status', 'awaiting_payment'),
       ]);
     }
-    return sendJson(response, 500, { error: error.message || 'The reservation could not be created.' });
+    return sendJson(response, 500, { error: 'The reservation could not be created. Please try again.' });
   }
 }
