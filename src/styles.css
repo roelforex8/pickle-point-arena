@@ -714,6 +714,8 @@ button { cursor: pointer; }
   box-shadow: -22vw 0 0 rgba(255,255,255,.14), 22vw 0 0 rgba(255,255,255,.14);
   pointer-events: none;
 }
+.dashboard-court-zone:has(.walk-in-modal) { z-index: 100; overflow: visible; }
+.dashboard-court-zone .dashboard-schedule-zone:has(.walk-in-modal) { position: relative; z-index: 101; }
 .dashboard-court-zone .dashboard-zone { position: relative; z-index: 1; width: auto; margin-left: 0; }
 .dashboard-schedule-zone { padding-top: 26px; padding-bottom: 26px; background: transparent; }
 .dashboard-owner-zone { min-height: 100vh; padding-top: 26px; padding-bottom: 90px; background: transparent; }
@@ -790,7 +792,7 @@ button { cursor: pointer; }
 .booking-inspector > button:not(.close-inspector) { min-height: 36px; padding: 0 11px; border: 1px solid var(--line); border-radius: 3px; background: white; color: var(--forest); font-size: 9px; font-weight: 900; }
 .close-inspector { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border: 0; background: transparent; color: #878e87; font-size: 18px; }
 .operations-note { margin: 12px 0 0; color: #8c928c; font-size: 8px; line-height: 1.45; text-align: center; }
-.walk-in-modal { position: fixed; inset: 0; z-index: 30; padding: 20px; display: grid; place-items: center; background: rgba(18, 24, 20, .68); }
+.walk-in-modal { position: fixed; inset: 0; z-index: 100; padding: 20px; display: grid; place-items: center; background: rgba(18, 24, 20, .68); }
 .walk-in-modal > section { position: relative; width: min(620px, 100%); max-height: calc(100dvh - 40px); padding: 28px; overflow-y: auto; border-radius: 5px; background: white; box-shadow: 0 24px 70px rgba(0, 0, 0, .3); }
 .walk-in-modal .modal-close { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border: 0; background: transparent; font-size: 20px; }
 .walk-in-modal > section > small, .walk-in-report > div > small { color: #245c79; font: 700 8px monospace; letter-spacing: .14em; }

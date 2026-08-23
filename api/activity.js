@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 
 import { getAdminClient, requireStaff, sendJson } from './_supabase.js';
+import { idempotencyConflict, parseIdempotency } from './_idempotency.js';
 
 const notificationRetentionDays = 7;
 
@@ -49,20 +50,18 @@ export function createActivityHandler({
       const message = String(body.message || '').trim().slice(0, 500);
       if (!title || !message) return sendJson(response, 400, { error: 'Activity title and message are required.' });
 
-      const { data: recipients, error: recipientError } = await auth.admin
-        .from('profiles')
-        .select('id')
-        .eq('active', true)
-        .in('role', ['owner', 'admin']);
-      if (recipientError) throw recipientError;
-
-      const { error } = await auth.admin.from('notifications').insert(
-        recipients.map(({ id }) => ({ recipient_id: id, kind: 'system', title, message })),
-      );
+      const idempotency = parseIdempotency(body, { title, message });
+      if (idempotency.error) return sendJson(response, 400, { error: idempotency.error });
+      const { error } = await auth.admin.rpc('record_staff_activity_idempotent', {
+        p_actor_id: auth.profile.id, p_title: title, p_message: message,
+        p_idempotency_key: idempotency.key, p_request_hash: idempotency.hash,
+      });
+      if (idempotencyConflict(error)) return sendJson(response, 409, { error: 'This request key was already used for different activity.' });
       if (error) throw error;
       return sendJson(response, 201, { success: true });
     } catch (error) {
-      return sendJson(response, 500, { error: error.message || 'The activity could not be recorded.' });
+      console.error('[api/activity] failed', { code: error.code || 'unknown' });
+      return sendJson(response, 500, { error: 'The activity could not be recorded.' });
     }
   };
 }

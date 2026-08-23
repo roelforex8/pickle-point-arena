@@ -1,3 +1,5 @@
+import { completeIdempotentOperation, pendingIdempotencyKey } from './idempotency.js';
+
 export function walkInHourlyRate(hour) {
   const value = Number(hour);
   if (!Number.isInteger(value) || value < 6 || value > 23) throw new Error('A selected Walk-In time is invalid.');
@@ -14,20 +16,28 @@ export async function postStaffWalkIn(supabaseClient, selections, fetchImpl = fe
   const { data, error } = await supabaseClient.auth.getSession();
   const accessToken = data?.session?.access_token;
   if (error || !accessToken) throw new Error('Your session is no longer valid. Sign in again and retry.');
-  return fetchImpl('/api/staff-walk-ins', {
+  const operation = 'staff-walk-in-create';
+  const idempotencyKey = pendingIdempotencyKey(operation, { selections });
+  const response = await fetchImpl('/api/staff-walk-ins', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({ selections }),
+    body: JSON.stringify({ selections, idempotencyKey }),
   });
+  if (response.ok) completeIdempotentOperation(operation, idempotencyKey);
+  return response;
 }
 
 export async function postStaffWalkInCancellation(supabaseClient, bookingId, fetchImpl = fetch) {
   const { data, error } = await supabaseClient.auth.getSession();
   const accessToken = data?.session?.access_token;
   if (error || !accessToken) throw new Error('Your session is no longer valid. Sign in again and retry.');
-  return fetchImpl('/api/staff-walk-in-cancellations', {
+  const operation = `staff-walk-in-cancel:${bookingId}`;
+  const idempotencyKey = pendingIdempotencyKey(operation, { bookingId });
+  const response = await fetchImpl('/api/staff-walk-in-cancellations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({ bookingId }),
+    body: JSON.stringify({ bookingId, idempotencyKey }),
   });
+  if (response.ok) completeIdempotentOperation(operation, idempotencyKey);
+  return response;
 }

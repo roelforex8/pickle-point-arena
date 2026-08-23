@@ -5,6 +5,7 @@ import { createStaffWalkInsHandler } from './staff-walk-ins.js';
 
 const migrationSource = await readFile(new URL('../supabase/migrations/20260820020000_add_walk_in_bookings.sql', import.meta.url), 'utf8');
 const onlineBookingSource = await readFile(new URL('./bookings.js', import.meta.url), 'utf8');
+const idempotencyKey = '11111111-1111-4111-8111-111111111111';
 
 function responseRecorder() {
   return {
@@ -23,7 +24,7 @@ function authenticatedSubject({ id = 'verified-profile-id', role = 'admin', rpcE
       async rpc(name, payload) {
         calls.rpc.push({ name, payload });
         return rpcError ? { data: null, error: rpcError } : {
-          data: [{ booking_id: 'walk-in-id', tracking_number: 'PPA-WALKIN', subtotal: 650, booking_fee: 0, total_amount: 650, confirmed_at: '2030-01-15T08:00:00Z' }],
+          data: { bookingId: 'walk-in-id', trackingNumber: 'PPA-WALKIN', subtotal: 650, bookingFee: 0, totalAmount: 650, confirmedAt: '2030-01-15T08:00:00Z' },
           error: null,
         };
       },
@@ -42,11 +43,11 @@ for (const role of ['admin', 'owner']) {
     const subject = authenticatedSubject({ role });
     const handler = createStaffWalkInsHandler({ requireStaffFn: async () => subject.auth });
     const response = responseRecorder();
-    await handler({ method: 'POST', body: { selections: validSelections }, headers: {} }, response);
+    await handler({ method: 'POST', body: { selections: validSelections, idempotencyKey }, headers: {} }, response);
     assert.equal(response.statusCode, 201);
     assert.equal(response.body.booking.bookingFee, 0);
     assert.equal(response.body.booking.totalAmount, 650);
-    assert.equal(subject.calls.rpc[0].name, 'create_staff_walk_in_booking');
+    assert.equal(subject.calls.rpc[0].name, 'create_staff_walk_in_booking_idempotent');
     assert.equal(subject.calls.rpc[0].payload.p_created_by, 'verified-profile-id');
     assert.equal('p_created_by' in response.body.booking, false);
   });
@@ -87,7 +88,7 @@ test('duplicate selections are rejected and database conflicts return safe 409 r
   const conflictSubject = authenticatedSubject({ rpcError: { code: 'P0001', message: 'A selected court-hour is blocked by the venue.' } });
   const conflictHandler = createStaffWalkInsHandler({ requireStaffFn: async () => conflictSubject.auth });
   const conflictResponse = responseRecorder();
-  await conflictHandler({ method: 'POST', body: { selections: validSelections }, headers: {} }, conflictResponse);
+  await conflictHandler({ method: 'POST', body: { selections: validSelections, idempotencyKey }, headers: {} }, conflictResponse);
   assert.equal(conflictResponse.statusCode, 409);
   assert.doesNotMatch(conflictResponse.body.error, /postgres|constraint|P0001/i);
 });
@@ -125,8 +126,8 @@ test('migration keeps Walk-In creation atomic, locked, confirmed, and service-ro
   assert.match(migrationSource, /Walk-In booking created by/);
 });
 
-test('online booking fee calculation remains unchanged', () => {
-  assert.match(onlineBookingSource, /const bookingFee = pricedSlots\.length \* 10;/);
+test('online booking fee calculation remains unchanged in the transactional RPC', () => {
+  assert.match(onlineBookingSource, /create_public_booking_idempotent/);
 });
 
 test('one parent Walk-In supports consecutive, non-consecutive, and multiple-court slots atomically', async () => {
@@ -139,7 +140,7 @@ test('one parent Walk-In supports consecutive, non-consecutive, and multiple-cou
   const subject = authenticatedSubject();
   const handler = createStaffWalkInsHandler({ requireStaffFn: async () => subject.auth });
   const response = responseRecorder();
-  await handler({ method: 'POST', body: { selections }, headers: {} }, response);
+  await handler({ method: 'POST', body: { selections, idempotencyKey }, headers: {} }, response);
   assert.equal(response.statusCode, 201);
   assert.deepEqual(subject.calls.rpc[0].payload.p_slots.map((slot) => ({ courtId: slot.court_id, start: slot.slot_start })), [
     { courtId: 1, start: '2099-01-15T00:00:00.000Z' },

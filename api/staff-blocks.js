@@ -1,5 +1,5 @@
 import { requireStaff, sendJson } from './_supabase.js';
-import { notifyStaff } from './_booking.js';
+import { idempotencyConflict, parseIdempotency, rpcResult } from './_idempotency.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -15,7 +15,7 @@ export function selectionInterval(selection) {
   return { date, hour, courtId, startMs: start.getTime(), endMs: start.getTime() + HOUR_MS };
 }
 
-export async function handler(request, response, { requireStaffFn = requireStaff, notify = notifyStaff } = {}) {
+export async function handler(request, response, { requireStaffFn = requireStaff } = {}) {
   response.setHeader('Cache-Control', 'no-store, max-age=0');
   if (request.method !== 'POST') {
     response.setHeader('Allow', 'POST');
@@ -37,16 +37,19 @@ export async function handler(request, response, { requireStaffFn = requireStaff
     if (selections.some((item) => item.startMs <= Date.now())) return sendJson(response, 400, { error: 'Past court-hours cannot be changed.' });
 
     const reason = String(body.reason || 'Venue unavailable').trim().slice(0, 120) || 'Venue unavailable';
-    const { data, error } = await auth.admin.rpc('manage_staff_blocked_slots', {
+    const slots = selections.map((item) => ({ court_id: item.courtId, slot_start: new Date(item.startMs).toISOString() }));
+    const idempotency = parseIdempotency(body, { action, reason, slots });
+    if (idempotency.error) return sendJson(response, 400, { error: idempotency.error });
+    const { data, error } = await auth.admin.rpc('manage_staff_blocked_slots_idempotent', {
       p_created_by: auth.profile.id,
       p_action: action,
       p_reason: reason,
-      p_slots: selections.map((item) => ({
-        court_id: item.courtId,
-        slot_start: new Date(item.startMs).toISOString(),
-      })),
+      p_slots: slots,
+      p_idempotency_key: idempotency.key,
+      p_request_hash: idempotency.hash,
     });
     if (error) {
+      if (idempotencyConflict(error)) return sendJson(response, 409, { error: 'This request key was already used for a different change.' });
       if (/occupancy_conflict/i.test(error.message || '')) {
         return sendJson(response, 409, { error: 'One or more selected court-hours are no longer available. Nothing was changed.' });
       }
@@ -56,20 +59,10 @@ export async function handler(request, response, { requireStaffFn = requireStaff
       throw error;
     }
 
-    const result = Array.isArray(data) ? data[0] : data;
+    const result = rpcResult(data);
     if (!result) throw new Error('missing_staff_block_result');
     const changed = Number(result.changed || 0);
     const skipped = Number(result.skipped || 0);
-    const actorRole = auth.profile.role === 'owner' ? 'Owner' : 'Administrator';
-    try {
-      await notify(auth.admin, {
-        kind: 'system',
-        title: `Court availability ${action === 'block' ? 'blocked' : 'unblocked'} by ${auth.profile.full_name || actorRole}`,
-        message: `${actorRole} · ${changed} court-hour${changed === 1 ? '' : 's'} ${action === 'block' ? 'blocked' : 'unblocked'} from the staff calendar.`,
-      });
-    } catch (notificationError) {
-      console.error('[api/staff-blocks] notification failed', { code: notificationError.code || 'unknown' });
-    }
     return sendJson(response, 200, { changed, skipped });
   } catch (error) {
     console.error('[api/staff-blocks] failed', { code: error.code || 'unknown' });

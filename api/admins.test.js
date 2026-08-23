@@ -7,6 +7,7 @@ import { adminStatus, createAdminsHandler, maskEmail } from './admins.js';
 const OWNER_ID = '11111111-1111-4111-8111-111111111111';
 const ADMIN_ID = '22222222-2222-4222-8222-222222222222';
 const OTHER_ID = '33333333-3333-4333-8333-333333333333';
+const IDEMPOTENCY_KEY = '44444444-4444-4444-8444-444444444444';
 
 function responseRecorder() {
   return {
@@ -20,6 +21,7 @@ function responseRecorder() {
 }
 
 function fakeServices(overrides = {}) {
+  const externalClaims = new Map();
   const profiles = new Map([
     [OWNER_ID, { id: OWNER_ID, full_name: 'Owner', role: 'owner', active: true, cancellation_pin_hash: 'hash' }],
     [ADMIN_ID, { id: ADMIN_ID, full_name: 'Test Administrator', role: 'admin', active: true, created_at: '2026-01-01T00:00:00Z' }],
@@ -29,6 +31,20 @@ function fakeServices(overrides = {}) {
   ]);
   const calls = { created: [], upserted: [], updatedAuth: [], profileActive: [], deletedAuth: [] };
   const services = {
+    async claimExternal({ operation }) {
+      const existing = externalClaims.get(operation);
+      if (existing?.result) return { disposition: 'completed', result: existing.result };
+      if (existing) return { disposition: 'in_progress' };
+      externalClaims.set(operation, {});
+      return { disposition: 'execute' };
+    },
+    async completeExternal(input) {
+      if (input.operation === 'admin_create') await services.upsertProfile({ id: input.targetId, fullName: input.targetFullName });
+      else if (['admin_disable', 'admin_reactivate', 'admin_remove'].includes(input.operation)) await services.setProfileActive(input.targetId, input.targetActive);
+      externalClaims.set(input.operation, { result: input.result });
+      return input.result;
+    },
+    async releaseExternal({ operation }) { externalClaims.delete(operation); },
     async listProfiles() { return [...profiles.values()].filter((profile) => profile.role === 'admin'); },
     async listAuthUsers() { return [...authUsers.values()]; },
     async getProfile(id) { return profiles.get(id) || null; },
@@ -71,7 +87,7 @@ function ownerHandler(services, requireStaffFn = async () => ({
 
 async function invoke(handler, method, body = {}) {
   const response = responseRecorder();
-  await handler({ method, body, headers: {} }, response);
+  await handler({ method, body: method === 'GET' ? body : { idempotencyKey: IDEMPOTENCY_KEY, ...body }, headers: {} }, response);
   return response;
 }
 
@@ -152,7 +168,7 @@ test('failed Auth disable restores the prior active profile and leaves the row v
   const response = await invoke(ownerHandler(base.services), 'PATCH', { id: ADMIN_ID, action: 'disable' });
   assert.equal(response.statusCode, 500);
   assert.equal(base.profiles.get(ADMIN_ID).active, true);
-  assert.deepEqual(base.calls.profileActive.map(({ active }) => active), [false, true]);
+  assert.deepEqual(base.calls.profileActive.map(({ active }) => active), []);
 });
 
 test('owner can reactivate a disabled administrator', async () => {

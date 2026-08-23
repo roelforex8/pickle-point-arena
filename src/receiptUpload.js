@@ -52,3 +52,9 @@ export async function detectReceiptMimeType(file) {
   }
   throw new Error('The selected file does not appear to be a supported receipt image or PDF. Try a screenshot instead.');
 }
+
+export async function receiptFileSha256(file) {
+  if (!globalThis.crypto?.subtle) throw new Error('Secure receipt verification is unavailable in this browser.');
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
+}

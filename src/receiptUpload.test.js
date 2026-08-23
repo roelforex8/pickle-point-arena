@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { detectReceiptMimeType, formatReceiptFileSize, maxReceiptBytes, receiptFileAccept, validateReceiptFile } from './receiptUpload.js';
+import { detectReceiptMimeType, formatReceiptFileSize, maxReceiptBytes, receiptFileAccept, receiptFileSha256, validateReceiptFile } from './receiptUpload.js';
 
 function fakeFile(name, type, bytes, size = bytes.length) {
   const contents = new Uint8Array(Math.max(size, bytes.length));
@@ -59,4 +59,9 @@ test('selected receipt size is formatted for immediate display', () => {
   assert.equal(formatReceiptFileSize(512), '512 B');
   assert.equal(formatReceiptFileSize(1536), '1.5 KB');
   assert.equal(formatReceiptFileSize(2 * 1024 * 1024), '2.0 MB');
+});
+
+test('receipt content gets a stable SHA-256 integrity fingerprint', async () => {
+  const file = new File([new TextEncoder().encode('abc')], 'proof.png', { type: 'image/png' });
+  assert.equal(await receiptFileSha256(file), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
 });

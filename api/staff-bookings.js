@@ -1,5 +1,18 @@
 import { requireStaff, sendJson } from './_supabase.js';
-import { notifyStaff } from './_booking.js';
+import { idempotencyConflict, parseIdempotency, rpcResult } from './_idempotency.js';
+
+function reviewError(error, action) {
+  const message = String(error?.message || '');
+  if (idempotencyConflict(error)) return { status: 409, message: 'This request identifier was already used for a different payment decision.' };
+  if (/payment_undo_expired/i.test(message)) return { status: 409, message: 'The 30-minute undo window has expired. Only the Owner can cancel a confirmed booking.' };
+  if (/payment_undo_limit/i.test(message)) return { status: 409, message: 'This booking has already used both undo corrections.' };
+  if (/occupancy_conflict/i.test(message)) return { status: 409, message: 'The decision cannot be undone because one or more court-hours are no longer available.' };
+  if (/payment_undo_invalid/i.test(message)) return { status: 409, message: 'Only a recent Confirm or Reject decision can be undone.' };
+  if (/payment_decision_conflict|booking_slots_inconsistent|payment_not_found|booking_not_found/i.test(message)) {
+    return { status: 409, message: action === 'undo' ? 'This decision can no longer be undone.' : 'This booking is no longer awaiting verification.' };
+  }
+  return { status: 500, message: 'The booking could not be updated. Please try again.' };
+}
 
 export default async function handler(request, response) {
   if (!['GET', 'PATCH'].includes(request.method)) {
@@ -34,44 +47,28 @@ export default async function handler(request, response) {
 
     const body = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : (request.body || {});
     const bookingId = String(body.bookingId || '');
-    if (body.action === 'undo') {
-      const { data: booking, error: fetchError } = await admin.from('bookings').select('id, tracking_number, customer_name, status, review_undo_count, payments(reviewed_at)').eq('id', bookingId).single();
-      if (fetchError || !['confirmed', 'rejected'].includes(booking?.status)) return sendJson(response, 409, { error: 'Only a recent Confirm or Reject decision can be undone.' });
-      const payment = Array.isArray(booking.payments) ? booking.payments[0] : booking.payments;
-      const reviewedAt = new Date(payment?.reviewed_at || 0).getTime();
-      if (!reviewedAt || Date.now() - reviewedAt >= 30 * 60 * 1000) return sendJson(response, 409, { error: 'The 30-minute undo window has expired. Only the Owner can override a confirmed booking by cancelling it with the Owner PIN.' });
-      if (Number(booking.review_undo_count || 0) >= 2) return sendJson(response, 409, { error: 'This booking has already used both undo corrections.' });
-      const nextUndoCount = Number(booking.review_undo_count || 0) + 1;
-      const { error: paymentError } = await admin.from('payments').update({ status: 'pending_verification', reviewed_at: null, reviewed_by: null, review_note: `Decision undone (${nextUndoCount}/2).` }).eq('booking_id', bookingId);
-      if (paymentError) throw paymentError;
-      const { error: bookingError } = await admin.from('bookings').update({ status: 'payment_submitted', confirmed_at: null, confirmed_by: null, review_undo_count: nextUndoCount }).eq('id', bookingId).eq('status', booking.status);
-      if (bookingError) throw bookingError;
-      const { error: slotError } = await admin.from('booking_slots').update({ status: 'payment_submitted' }).eq('booking_id', bookingId).eq('status', booking.status);
-      if (slotError) throw slotError;
-      await notifyStaff(admin, { booking_id: bookingId, kind: 'system', title: `${booking.tracking_number} · Decision undone`, message: `${profile.full_name || 'Staff'} returned ${booking.customer_name}'s booking to payment review (${nextUndoCount}/2 corrections used).` });
-      return sendJson(response, 200, { success: true, undoCount: nextUndoCount });
+    const action = String(body.action || '').toLowerCase();
+    if (!['confirm', 'reject', 'undo'].includes(action)) return sendJson(response, 400, { error: 'Choose a valid payment decision.' });
+    const idempotency = parseIdempotency(body, { bookingId, action });
+    if (idempotency.error) return sendJson(response, 400, { error: idempotency.error });
+    const rpcName = action === 'undo' ? 'undo_payment_decision_idempotent' : 'review_payment_idempotent';
+    const params = {
+      p_actor_id: profile.id,
+      p_booking_id: bookingId,
+      p_idempotency_key: idempotency.key,
+      p_request_hash: idempotency.hash,
+      ...(action === 'undo' ? {} : { p_decision: action }),
+    };
+    const { data, error } = await admin.rpc(rpcName, params);
+    if (error) {
+      const safe = reviewError(error, action);
+      return sendJson(response, safe.status, { error: safe.message });
     }
-    const action = body.action === 'reject' ? 'reject' : 'confirm';
-    const { data: booking, error: bookingFetchError } = await admin.from('bookings').select('id, tracking_number, customer_name, status').eq('id', bookingId).single();
-    if (bookingFetchError || booking.status !== 'payment_submitted') return sendJson(response, 409, { error: 'This booking is no longer awaiting verification.' });
-
-    const confirmed = action === 'confirm';
-    const now = new Date().toISOString();
-    const { error: paymentError } = await admin.from('payments').update({ status: confirmed ? 'verified' : 'rejected', reviewed_at: now, reviewed_by: profile.id, review_note: confirmed ? 'Payment verified.' : 'Payment proof rejected.' }).eq('booking_id', bookingId).eq('status', 'pending_verification');
-    if (paymentError) throw paymentError;
-    const { error: bookingError } = await admin.from('bookings').update({ status: confirmed ? 'confirmed' : 'rejected', confirmed_at: confirmed ? now : null, confirmed_by: confirmed ? profile.id : null }).eq('id', bookingId);
-    if (bookingError) throw bookingError;
-    const { error: slotError } = await admin.from('booking_slots').update({ status: confirmed ? 'confirmed' : 'rejected' }).eq('booking_id', bookingId).eq('status', 'payment_submitted');
-    if (slotError) throw slotError;
-
-    await notifyStaff(admin, {
-      booking_id: bookingId,
-      kind: confirmed ? 'booking_confirmed' : 'system',
-      title: `${booking.tracking_number} · ${confirmed ? 'Booking confirmed' : 'Payment rejected'}`,
-      message: `${booking.customer_name}'s booking was ${confirmed ? 'confirmed' : 'rejected'} by ${profile.full_name || 'staff'}.`,
-    });
-    return sendJson(response, 200, { success: true });
+    const result = rpcResult(data);
+    if (!result?.success) throw new Error('missing_payment_decision_result');
+    return sendJson(response, 200, result);
   } catch (error) {
-    return sendJson(response, 500, { error: error.message || 'The booking could not be updated.' });
+    console.error('[api/staff-bookings] failed', { code: error?.code || 'unknown' });
+    return sendJson(response, 500, { error: 'The booking could not be updated. Please try again.' });
   }
 }

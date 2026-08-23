@@ -7,7 +7,8 @@ import ReceiptFilePicker from './ReceiptFilePicker';
 import { administratorRemovalConfirmation, administratorStatusLabel, canConfirmAdministratorRemoval } from './adminManagement';
 import { BrowserHandoffPrompt } from './InAppBrowserHandoff';
 import { detectFacebookInAppBrowser, shouldShowBrowserHandoff } from './browserHandoff';
-import { detectReceiptMimeType, validateReceiptFile } from './receiptUpload';
+import { detectReceiptMimeType, receiptFileSha256, validateReceiptFile } from './receiptUpload';
+import { completeIdempotentOperation, pendingIdempotencyKey } from './idempotency';
 import { changeOwnerPassword } from './ownerPassword';
 import { postStaffBlocks } from './staffBlocks';
 import { postStaffWalkIn, postStaffWalkInCancellation, walkInBookingSummary } from './walkInBooking';
@@ -223,12 +224,16 @@ async function prepareReceiptUpload(file) {
 
 async function uploadPaymentProof({ lookupMethod, lookupValue, paymentMethod = 'gcash', referenceNumber, file }) {
   const preparedUpload = await prepareReceiptUpload(file);
+  const fileSha256 = await receiptFileSha256(preparedUpload.file);
+  const paymentPayload = { lookupMethod, lookupValue, paymentMethod, referenceNumber, mimeType: preparedUpload.mimeType, fileSize: preparedUpload.file.size, fileSha256 };
+  const operation = `payment:${lookupMethod}:${String(lookupValue).trim().toLowerCase()}`;
+  const idempotencyKey = pendingIdempotencyKey(operation, paymentPayload);
   let prepareResponse;
   try {
     prepareResponse = await fetch('/api/payments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lookupMethod, lookupValue, mimeType: preparedUpload.mimeType, fileSize: preparedUpload.file.size }),
+      body: JSON.stringify({ ...paymentPayload, idempotencyKey }),
     });
   } catch {
     throw new Error('The upload service could not be reached. Check your connection and try again.');
@@ -240,16 +245,22 @@ async function uploadPaymentProof({ lookupMethod, lookupValue, paymentMethod = '
     throw new Error('The upload service returned an unexpected response. Please try again.');
   }
   if (!prepareResponse.ok) throw new Error(prepared.error || 'The receipt upload could not be prepared.');
+  if (prepared.finalized) {
+    completeIdempotentOperation(operation, idempotencyKey);
+    return prepared.booking;
+  }
 
-  const { error: uploadError } = await supabase.storage.from('payment-receipts').uploadToSignedUrl(prepared.path, prepared.token, preparedUpload.file, { contentType: preparedUpload.mimeType });
-  if (uploadError) throw new Error('The receipt upload could not be completed. Check your connection and try again.');
+  if (!prepared.alreadyUploaded) {
+    const { error: uploadError } = await supabase.storage.from('payment-receipts').uploadToSignedUrl(prepared.path, prepared.token, preparedUpload.file, { contentType: preparedUpload.mimeType });
+    if (uploadError) throw new Error('The receipt upload could not be completed. Check your connection and try again.');
+  }
 
   let finalizeResponse;
   try {
     finalizeResponse = await fetch('/api/payments', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lookupMethod, lookupValue, paymentMethod, referenceNumber, receiptPath: prepared.path }),
+      body: JSON.stringify({ ...paymentPayload, receiptPath: prepared.path, idempotencyKey }),
     });
   } catch {
     throw new Error('The upload could not be finalized. Check your connection and try again.');
@@ -261,6 +272,7 @@ async function uploadPaymentProof({ lookupMethod, lookupValue, paymentMethod = '
     throw new Error('The upload service returned an unexpected response. Please try again.');
   }
   if (!finalizeResponse.ok) throw new Error(finalized.error || 'The payment proof could not be submitted.');
+  completeIdempotentOperation(operation, idempotencyKey);
   return finalized.booking;
 }
 
@@ -680,14 +692,18 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
       const [, hour, courtIndex] = key.split('|');
       return { courtId: Number(courtIndex) + 1, slotStart: manilaSlotIso(selectedDate, Number(hour)) };
     });
+    const bookingPayload = { customerName, customerEmail, customerMobile, slots };
+    const operation = 'public-booking-create';
+    const idempotencyKey = pendingIdempotencyKey(operation, bookingPayload);
     try {
-      const response = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customerName, customerEmail, customerMobile, slots }) });
+      const response = await fetch('/api/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...bookingPayload, idempotencyKey }) });
       const result = await response.json();
       if (!response.ok) {
         reservationSubmittingRef.current = false;
         setCheckoutMessage(result.error || 'The reservation could not be created. Please try again.');
         await refreshAvailability();
       } else {
+        completeIdempotentOperation(operation, idempotencyKey);
         setTrackingNumber(result.trackingNumber);
         const reservedBooking = { ...result, status: 'awaiting_payment' };
         bookingRecordRef.current = reservedBooking;
@@ -797,7 +813,7 @@ function BookingCalendar({ selectedDate, setSelectedDate, selectedSlots, setSele
             <div className="reservation-form">
               <label><span><b>*</b> Full Name</span><input value={customerName} onChange={(event) => { setCustomerName(event.target.value); setCheckoutMessage(''); }} placeholder="John Doe" autoComplete="name" required /></label>
               <label><span><b>*</b> Email Address</span><input type="email" value={customerEmail} onChange={(event) => { setCustomerEmail(event.target.value); setCheckoutMessage(''); }} placeholder="john@example.com" autoComplete="email" required /></label>
-              <label><span><b>*</b> Mobile Number</span><input type="tel" inputMode="tel" pattern="[+0-9() -]{10,24}" value={customerMobile} maxLength={24} onChange={(event) => { setCustomerMobile(event.target.value); setCheckoutMessage(''); }} placeholder="+63 912 345 6789" autoComplete="tel" required /></label>
+              <label><span><b>*</b> Mobile Number</span><input type="tel" inputMode="tel" pattern="[0-9+\(\) \-]{10,24}" value={customerMobile} maxLength={24} onChange={(event) => { setCustomerMobile(event.target.value); setCheckoutMessage(''); }} placeholder="+63 912 345 6789" autoComplete="tel" required /></label>
               {checkoutMessage && <p className="checkout-message" role="alert">{checkoutMessage}</p>}
             </div>
             <div className="reservation-total"><span>Selected Slots:<b>{checkoutSelection.length}</b></span><strong>Total Amount:<b>₱{checkoutTotal.toLocaleString()}</b></strong></div>
@@ -1309,9 +1325,13 @@ function OperationsCalendar({ selectedDate, setSelectedDate, refreshKey, role, s
     if (!cancelTarget?.bookingId || !/^\d{4}$/.test(cancelPin)) return setCancelMessage('Enter the Owner’s four-digit cancellation PIN.');
     setCancelSubmitting(true);
     setCancelMessage('');
-    const response = await fetch('/api/owner-pin', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({ bookingId: cancelTarget.bookingId, pin: cancelPin }) });
+    const operation = `owner-booking-cancel:${cancelTarget.bookingId}`;
+    const payload = { bookingId: cancelTarget.bookingId, pin: cancelPin };
+    const idempotencyKey = pendingIdempotencyKey(operation, payload);
+    const response = await fetch('/api/owner-pin', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({ ...payload, idempotencyKey }) });
     const result = await response.json();
     if (response.ok) {
+      completeIdempotentOperation(operation, idempotencyKey);
       setCancelTarget(null);
       setCancelPin('');
       setSelectedBooking(null);
@@ -1474,9 +1494,13 @@ function PaymentReview({ session, refreshKey, onChanged, activityPanel }) {
   const review = async (bookingId, action) => {
     setWorkingId(bookingId);
     setMessage('');
-    const response = await fetch('/api/staff-bookings', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ bookingId, action }) });
+    const operation = `payment-review:${bookingId}:${action}`;
+    const payload = { bookingId, action };
+    const idempotencyKey = pendingIdempotencyKey(operation, payload);
+    const response = await fetch('/api/staff-bookings', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ ...payload, idempotencyKey }) });
     const result = await response.json();
     if (response.ok) {
+      completeIdempotentOperation(operation, idempotencyKey);
       setMessage(action === 'undo' ? 'The decision was undone and returned to payment review.' : action === 'confirm' ? 'Payment verified and booking confirmed.' : 'Payment rejected and court slots released.');
       await loadBookings();
       onChanged();
@@ -1871,38 +1895,18 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
       return;
     }
 
-    const grouped = new Map();
-    availableSelections.forEach((item) => {
-      const key = `${item.date}|${item.courtId}`;
-      if (!grouped.has(key)) grouped.set(key, []);
-      grouped.get(key).push(item);
+    const response = await postStaffBlocks(supabase, {
+      action: 'block',
+      reason: blockReason,
+      selections: availableSelections.map(({ date, hour, courtId }) => ({ date, hour, courtId })),
     });
-    const rows = [];
-    grouped.forEach((items) => {
-      items.sort((a, b) => hours.indexOf(a.hour) - hours.indexOf(b.hour));
-      let run = null;
-      items.forEach((item) => {
-        if (run && run.ends_at === item.startsAt) run.ends_at = item.endsAt;
-        else {
-          if (run) rows.push(run);
-          run = { court_id: item.courtId, starts_at: item.startsAt, ends_at: item.endsAt, reason: blockReason, created_by: session.user.id };
-        }
-      });
-      if (run) rows.push(run);
-    });
-
-    for (let index = 0; index < rows.length; index += 200) {
-      const { error } = await supabase.from('blocked_slots').insert(rows.slice(index, index + 200));
-      if (error) {
-        setBlockMessage(error.message);
-        setBlockSubmitting(false);
-        return;
-      }
+    const result = await response.json();
+    if (!response.ok) {
+      setBlockMessage(result.error || 'Court availability could not be updated.');
+      setBlockSubmitting(false);
+      return;
     }
-
-    const skipped = hourlySelections.length - availableSelections.length;
-    await authorizedFetch('/api/activity', { method: 'POST', body: JSON.stringify({ title: 'Court availability blocked', message: `${availableSelections.length} court-hour${availableSelections.length === 1 ? '' : 's'} across ${blockDates.length} date${blockDates.length === 1 ? '' : 's'} · ${blockReason}` }) });
-    setBlockMessage(`${availableSelections.length} court-hour${availableSelections.length === 1 ? '' : 's'} blocked successfully.${skipped ? ` ${skipped} already-blocked selection${skipped === 1 ? ' was' : 's were'} skipped.` : ''}`);
+    setBlockMessage(`${result.changed || 0} court-hour${result.changed === 1 ? '' : 's'} blocked successfully.${result.skipped ? ` ${result.skipped} unchanged.` : ''}`);
     setBlockSubmitting(false);
     setRefreshKey((value) => value + 1);
   };
@@ -1919,9 +1923,13 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
     setAdminMessage('');
     if (!adminName.trim() || !adminEmail.trim() || !validStaffPassword(adminPassword)) return setAdminMessage(passwordRequirements);
     setAdminSubmitting(true);
-    const response = await authorizedFetch('/api/admins', { method: 'POST', body: JSON.stringify({ fullName: adminName, email: adminEmail, password: adminPassword }) });
+    const operation = 'admin-create';
+    const payload = { fullName: adminName, email: adminEmail, password: adminPassword };
+    const idempotencyKey = pendingIdempotencyKey(operation, payload);
+    const response = await authorizedFetch('/api/admins', { method: 'POST', body: JSON.stringify({ ...payload, idempotencyKey }) });
     const result = await response.json();
     if (response.ok) {
+      completeIdempotentOperation(operation, idempotencyKey);
       if (result.admin?.id) {
         setSessionAdminPasswords((current) => ({ ...current, [result.admin.id]: adminPassword }));
       }
@@ -1937,9 +1945,13 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
     setAdminMessage('');
     setAdminActionId(id);
     try {
-      const response = await authorizedFetch('/api/admins', { method: 'PATCH', body: JSON.stringify({ id, action }) });
+      const operation = `admin-${action}:${id}`;
+      const payload = { id, action };
+      const idempotencyKey = pendingIdempotencyKey(operation, payload);
+      const response = await authorizedFetch('/api/admins', { method: 'PATCH', body: JSON.stringify({ ...payload, idempotencyKey }) });
       const result = await response.json();
       if (!response.ok) return setAdminMessage(result.error || 'Administrator access could not be updated.');
+      completeIdempotentOperation(operation, idempotencyKey);
       setAdminMessage(action === 'disable' ? 'Administrator access disabled.' : 'Administrator access reactivated.');
       await loadAdmins();
     } catch {
@@ -1968,12 +1980,16 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
     setAdminRemoveSubmitting(true);
     setAdminRemoveMessage('');
     try {
+      const operation = `admin-remove:${adminRemoveTarget.id}`;
+      const payload = { id: adminRemoveTarget.id, confirmation: adminRemoveConfirmation };
+      const idempotencyKey = pendingIdempotencyKey(operation, payload);
       const response = await authorizedFetch('/api/admins', {
         method: 'DELETE',
-        body: JSON.stringify({ id: adminRemoveTarget.id, confirmation: adminRemoveConfirmation }),
+        body: JSON.stringify({ ...payload, idempotencyKey }),
       });
       const result = await response.json();
       if (!response.ok) return setAdminRemoveMessage(result.error || 'The administrator could not be removed.');
+      completeIdempotentOperation(operation, idempotencyKey);
       setAdminRemoveTarget(null);
       setAdminRemoveConfirmation('');
       setExpandedAdminId('');
@@ -2035,9 +2051,13 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
     if (!validStaffPassword(adminNewPassword)) return setAdminPasswordChangeMessage(passwordRequirements);
     if (!/^\d{4}$/.test(adminPasswordOwnerPin)) return setAdminPasswordChangeMessage('Enter the four-digit Owner PIN to authorize this password change.');
     setAdminPasswordChangeSubmitting(true);
-    const response = await authorizedFetch('/api/admins', { method: 'PATCH', body: JSON.stringify({ id: adminId, password: adminNewPassword, ownerPin: adminPasswordOwnerPin }) });
+    const operation = `admin-password:${adminId}`;
+    const payload = { id: adminId, password: adminNewPassword, ownerPin: adminPasswordOwnerPin };
+    const idempotencyKey = pendingIdempotencyKey(operation, payload);
+    const response = await authorizedFetch('/api/admins', { method: 'PATCH', body: JSON.stringify({ ...payload, idempotencyKey }) });
     const result = await response.json();
     if (response.ok) {
+      completeIdempotentOperation(operation, idempotencyKey);
       setSessionAdminPasswords((current) => ({ ...current, [adminId]: adminNewPassword }));
       setAdminNewPassword('');
       setAdminPasswordOwnerPin('');
@@ -2069,9 +2089,13 @@ function OwnerPreview({ role = 'owner', session, selectedDate, setSelectedDate }
     if (!/^\d{4}$/.test(cancellationPin)) return setPinMessage('Enter exactly four digits.');
     if (cancellationPin !== confirmCancellationPin) return setPinMessage('The PIN entries do not match.');
     setPinSubmitting(true);
-    const response = await authorizedFetch('/api/owner-pin', { method: 'PUT', body: JSON.stringify({ pin: cancellationPin }) });
+    const operation = 'owner-pin-update';
+    const payload = { pin: cancellationPin };
+    const idempotencyKey = pendingIdempotencyKey(operation, payload);
+    const response = await authorizedFetch('/api/owner-pin', { method: 'PUT', body: JSON.stringify({ ...payload, idempotencyKey }) });
     const result = await response.json();
     if (response.ok) {
+      completeIdempotentOperation(operation, idempotencyKey);
       setPinConfigured(true);
       setCancellationPin('');
       setConfirmCancellationPin('');

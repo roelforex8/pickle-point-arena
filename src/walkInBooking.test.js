@@ -23,7 +23,9 @@ test('Walk-In requests send only selections with the current authenticated sessi
   await postStaffWalkIn(client, selections, async (url, options) => { request = { url, options }; return { ok: true }; });
   assert.equal(request.url, '/api/staff-walk-ins');
   assert.equal(request.options.headers.Authorization, 'Bearer verified-token');
-  assert.deepEqual(JSON.parse(request.options.body), { selections });
+  const requestBody = JSON.parse(request.options.body);
+  assert.deepEqual(requestBody.selections, selections);
+  assert.match(requestBody.idempotencyKey, /^[0-9a-f-]{36}$/i);
   assert.doesNotMatch(request.options.body, /created|confirmed|admin|role/i);
 });
 
@@ -62,6 +64,8 @@ test('Walk-In cancellation client sends only the booking ID with the current ses
   await postStaffWalkInCancellation(client, bookingId, async (url, options) => { request = { url, options }; return { ok: true }; });
   assert.equal(request.url, '/api/staff-walk-in-cancellations');
   assert.equal(request.options.headers.Authorization, 'Bearer verified-token');
-  assert.deepEqual(JSON.parse(request.options.body), { bookingId });
+  const requestBody = JSON.parse(request.options.body);
+  assert.equal(requestBody.bookingId, bookingId);
+  assert.match(requestBody.idempotencyKey, /^[0-9a-f-]{36}$/i);
   assert.doesNotMatch(request.options.body, /cancelled|staff|admin|owner|role/i);
 });

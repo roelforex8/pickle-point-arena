@@ -21,10 +21,12 @@ export async function findPublicBooking(admin, method, value) {
 
 export async function expireIfNeeded(admin, booking) {
   if (booking.status !== 'awaiting_payment' || new Date(booking.hold_expires_at).getTime() > Date.now()) return booking;
-  await admin.from('booking_slots').update({ status: 'expired' }).eq('booking_id', booking.id).eq('status', 'held');
-  await admin.from('bookings').update({ status: 'expired' }).eq('id', booking.id).eq('status', 'awaiting_payment');
-  booking.status = 'expired';
-  booking.booking_slots = (booking.booking_slots || []).map((slot) => slot.status === 'held' ? { ...slot, status: 'expired' } : slot);
+  const { data: status, error } = await admin.rpc('expire_public_booking', { p_booking_id: booking.id });
+  if (error) throw error;
+  if (status === 'expired') {
+    booking.status = 'expired';
+    booking.booking_slots = (booking.booking_slots || []).map((slot) => slot.status === 'held' ? { ...slot, status: 'expired' } : slot);
+  }
   return booking;
 }
 

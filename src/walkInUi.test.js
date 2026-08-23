@@ -28,7 +28,7 @@ test('admin schedule identifies Walk-In while public availability remains ordina
 });
 
 test('Walk-In client submits slots only and does not enter payment or receipt flows', () => {
-  assert.match(walkInClientSource, /body: JSON\.stringify\(\{ selections \}\)/);
+  assert.match(walkInClientSource, /body: JSON\.stringify\(\{ selections, idempotencyKey \}\)/);
   assert.doesNotMatch(walkInClientSource, /created_by|confirmed_by|payment|receipt/i);
 });
 

@@ -6,6 +6,7 @@ import { createStaffWalkInCancellationHandler } from './staff-walk-in-cancellati
 const migrationSource = await readFile(new URL('../supabase/migrations/20260820030000_add_walk_in_cancellation.sql', import.meta.url), 'utf8');
 const fixMigrationSource = await readFile(new URL('../supabase/migrations/20260820040000_fix_walk_in_cancellation_rpc.sql', import.meta.url), 'utf8');
 const validBookingId = '11111111-1111-4111-8111-111111111111';
+const idempotencyKey = '22222222-2222-4222-8222-222222222222';
 
 function responseRecorder() {
   return {
@@ -26,7 +27,7 @@ function authenticatedSubject({ id = 'verified-profile-id', role = 'admin', rpcE
         async rpc(name, payload) {
           calls.rpc.push({ name, payload });
           return rpcError ? { data: null, error: rpcError } : {
-            data: [{ booking_id: validBookingId, tracking_number: 'PPA-WALKIN', total_amount: 1000, cancelled_at: '2030-01-15T08:00:00Z' }],
+            data: { bookingId: validBookingId, trackingNumber: 'PPA-WALKIN', totalAmount: 1000, cancelledAt: '2030-01-15T08:00:00Z' },
             error: null,
           };
         },
@@ -40,11 +41,12 @@ for (const role of ['admin', 'owner']) {
     const subject = authenticatedSubject({ role });
     const handler = createStaffWalkInCancellationHandler({ requireStaffFn: async () => subject.auth });
     const response = responseRecorder();
-    await handler({ method: 'POST', body: { bookingId: validBookingId }, headers: {} }, response);
+    await handler({ method: 'POST', body: { bookingId: validBookingId, idempotencyKey }, headers: {} }, response);
     assert.equal(response.statusCode, 200);
     assert.equal(response.body.booking.status, 'cancelled');
-    assert.equal(subject.calls.rpc[0].name, 'cancel_staff_walk_in_booking');
-    assert.deepEqual(subject.calls.rpc[0].payload, { p_cancelled_by: 'verified-profile-id', p_booking_id: validBookingId });
+    assert.equal(subject.calls.rpc[0].name, 'cancel_staff_walk_in_booking_idempotent');
+    assert.equal(subject.calls.rpc[0].payload.p_cancelled_by, 'verified-profile-id');
+    assert.equal(subject.calls.rpc[0].payload.p_booking_id, validBookingId);
     assert.equal('p_cancelled_by' in response.body.booking, false);
   });
 }
@@ -57,7 +59,7 @@ for (const [label, authResult, expectedStatus] of [
   test(`${label} cannot cancel a Walk-In`, async () => {
     const handler = createStaffWalkInCancellationHandler({ requireStaffFn: async () => authResult });
     const response = responseRecorder();
-    await handler({ method: 'POST', body: { bookingId: validBookingId }, headers: {} }, response);
+    await handler({ method: 'POST', body: { bookingId: validBookingId, idempotencyKey }, headers: {} }, response);
     assert.equal(response.statusCode, expectedStatus);
   });
 }
@@ -94,7 +96,7 @@ test('online and already-cancelled bookings receive the same safe conflict respo
     const subject = authenticatedSubject({ rpcError: { code: 'P0001', message: databaseMessage } });
     const handler = createStaffWalkInCancellationHandler({ requireStaffFn: async () => subject.auth });
     const response = responseRecorder();
-    await handler({ method: 'POST', body: { bookingId: validBookingId }, headers: {} }, response);
+    await handler({ method: 'POST', body: { bookingId: validBookingId, idempotencyKey }, headers: {} }, response);
     assert.equal(response.statusCode, 409);
     assert.doesNotMatch(response.body.error, /postgres|P0001|walk_in_/i);
   }

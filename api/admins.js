@@ -1,5 +1,6 @@
 import { requireStaff, sendJson } from './_supabase.js';
 import { verifyOwnerPin } from './_pin.js';
+import { idempotencyConflict, idempotencyInProgress, parseIdempotency, rpcResult } from './_idempotency.js';
 
 const LONG_AUTH_BAN = '876000h';
 
@@ -57,6 +58,30 @@ function publicAdmin(profile, authUser) {
 
 export function createSupabaseAdminServices(admin) {
   return {
+    async claimExternal({ operation, actorId, idempotencyKey, requestHash }) {
+      const { data, error } = await admin.rpc('claim_external_admin_operation', {
+        p_operation: operation, p_actor_id: actorId,
+        p_idempotency_key: idempotencyKey, p_request_hash: requestHash,
+      });
+      if (error) throw error;
+      return rpcResult(data);
+    },
+    async completeExternal({ operation, actorId, targetId, targetFullName, targetActive, idempotencyKey, requestHash, result }) {
+      const { data, error } = await admin.rpc('complete_external_admin_operation', {
+        p_operation: operation, p_actor_id: actorId, p_target_id: targetId,
+        p_target_full_name: targetFullName || null, p_target_active: targetActive,
+        p_idempotency_key: idempotencyKey, p_request_hash: requestHash, p_response: result,
+      });
+      if (error) throw error;
+      return rpcResult(data);
+    },
+    async releaseExternal({ operation, actorId, idempotencyKey, requestHash }) {
+      const { error } = await admin.rpc('release_external_admin_operation', {
+        p_operation: operation, p_actor_id: actorId,
+        p_idempotency_key: idempotencyKey, p_request_hash: requestHash,
+      });
+      if (error) throw error;
+    },
     async listProfiles() {
       const { data, error } = await admin.from('profiles').select('id, full_name, role, active, created_at').eq('role', 'admin').order('created_at', { ascending: false });
       if (error) throw error;
@@ -83,10 +108,6 @@ export function createSupabaseAdminServices(admin) {
       if (error) throw error;
       return data.user;
     },
-    async setProfileActive(id, active) {
-      const { data, error } = await admin.from('profiles').update({ active }).eq('id', id).eq('role', 'admin').select('id').maybeSingle();
-      if (error || !data) throw error || new Error('profile_update_failed');
-    },
     async createAuthUser({ email, password, fullName }) {
       const { data, error } = await admin.auth.admin.createUser({
         email,
@@ -97,10 +118,6 @@ export function createSupabaseAdminServices(admin) {
       });
       if (error) throw error;
       return data.user;
-    },
-    async upsertProfile({ id, fullName }) {
-      const { error } = await admin.from('profiles').upsert({ id, full_name: fullName, role: 'admin', active: true }, { onConflict: 'id' });
-      if (error) throw error;
     },
     async updateAuthUser(id, attributes) {
       const { data, error } = await admin.auth.admin.updateUserById(id, attributes);
@@ -114,6 +131,45 @@ export function createSupabaseAdminServices(admin) {
   };
 }
 
+async function claimAdminOperation(services, actorId, operation, body, payload) {
+  const idempotency = parseIdempotency(body, payload);
+  if (idempotency.error) return { error: idempotency.error, status: 400 };
+  try {
+    const claim = await services.claimExternal({ operation, actorId, idempotencyKey: idempotency.key, requestHash: idempotency.hash });
+    if (claim?.disposition === 'completed') return { completed: claim.result };
+    if (idempotencyInProgress(claim)) return { error: 'This administrator operation is already in progress. Retry shortly.', status: 409 };
+    return { idempotency };
+  } catch (error) {
+    if (idempotencyConflict(error)) return { error: 'This request key was already used for a different administrator operation.', status: 409 };
+    throw error;
+  }
+}
+
+async function completeAdminOperation(services, auth, operation, idempotency, target, result) {
+  return services.completeExternal({
+    operation, actorId: auth.profile.id, targetId: target.id,
+    targetFullName: target.fullName || target.profile?.full_name || null,
+    targetActive: target.active, idempotencyKey: idempotency.key,
+    requestHash: idempotency.hash, result,
+  });
+}
+
+async function releaseAfterCompensation(services, auth, operation, idempotency) {
+  await services.releaseExternal({ operation, actorId: auth.profile.id, idempotencyKey: idempotency.key, requestHash: idempotency.hash });
+}
+
+async function reconcileAmbiguousCompletion(services, auth, operation, idempotency) {
+  try {
+    const claim = await services.claimExternal({
+      operation, actorId: auth.profile.id,
+      idempotencyKey: idempotency.key, requestHash: idempotency.hash,
+    });
+    if (claim?.disposition === 'completed') return { completed: claim.result };
+    if (claim?.disposition === 'in_progress') return { safeToCompensate: true };
+  } catch {}
+  return { preserveExternalState: true };
+}
+
 async function loadTarget(body, auth, services) {
   const id = String(body.id || '');
   if (!isUuid(id)) return { error: 'A valid administrator ID is required.', status: 400 };
@@ -123,57 +179,6 @@ async function loadTarget(body, auth, services) {
   if (profile.role !== 'admin') return { error: 'Only administrator accounts can be managed here.', status: 403 };
   const authUser = await services.getAuthUser(id);
   return { id, profile, authUser, currentStatus: adminStatus(profile, authUser) };
-}
-
-async function setDisabled(target, services) {
-  if (target.currentStatus === 'removed') return { status: 409, body: { error: 'A removed administrator cannot be disabled.' } };
-  const wasActive = Boolean(target.profile.active);
-  await services.setProfileActive(target.id, false);
-  try {
-    await services.updateAuthUser(target.id, {
-      ban_duration: LONG_AUTH_BAN,
-      app_metadata: metadataFor(target.authUser, 'disabled'),
-    });
-  } catch (error) {
-    if (wasActive) await services.setProfileActive(target.id, true).catch(() => {});
-    throw error;
-  }
-  return { status: 200, body: { success: true, status: 'disabled' } };
-}
-
-async function setActive(target, services) {
-  if (target.currentStatus === 'removed') return { status: 409, body: { error: 'A removed administrator cannot be reactivated.' } };
-  if (!target.authUser) return { status: 409, body: { error: 'This administrator no longer has an authentication account.' } };
-  await services.updateAuthUser(target.id, {
-    ban_duration: 'none',
-    app_metadata: metadataFor(target.authUser, 'active'),
-  });
-  try {
-    await services.setProfileActive(target.id, true);
-  } catch (error) {
-    await services.updateAuthUser(target.id, {
-      ban_duration: LONG_AUTH_BAN,
-      app_metadata: metadataFor(target.authUser, 'disabled'),
-    }).catch(() => {});
-    throw error;
-  }
-  return { status: 200, body: { success: true, status: 'active' } };
-}
-
-async function setRemoved(target, services) {
-  if (target.currentStatus === 'removed') return { status: 200, body: { success: true, status: 'removed' } };
-  const wasActive = Boolean(target.profile.active);
-  await services.setProfileActive(target.id, false);
-  try {
-    await services.updateAuthUser(target.id, {
-      ban_duration: LONG_AUTH_BAN,
-      app_metadata: metadataFor(target.authUser, 'removed'),
-    });
-  } catch (error) {
-    if (wasActive) await services.setProfileActive(target.id, true).catch(() => {});
-    throw error;
-  }
-  return { status: 200, body: { success: true, status: 'removed' } };
 }
 
 export function createAdminsHandler({
@@ -220,21 +225,30 @@ export function createAdminsHandler({
           return sendJson(response, 400, { error: 'Use at least 5 letters, including 1 capital letter, plus 1 number and 1 special character.' });
         }
 
+        const claimed = await claimAdminOperation(services, auth.profile.id, 'admin_create', body, { fullName, email, password });
+        if (claimed.error) return sendJson(response, claimed.status, { error: claimed.error });
+        if (claimed.completed) return sendJson(response, 201, claimed.completed);
+
         let createdUser;
         try {
           createdUser = await services.createAuthUser({ email, password, fullName });
         } catch (error) {
+          await releaseAfterCompensation(services, auth, 'admin_create', claimed.idempotency).catch(() => {});
           return sendJson(response, 400, { error: safeAuthError(error, 'The administrator account could not be created.') });
         }
+        const result = { admin: { id: createdUser.id, full_name: fullName, email: maskEmail(email), role: 'admin', active: true, status: 'active' } };
         try {
-          await services.upsertProfile({ id: createdUser.id, fullName });
+          await completeAdminOperation(services, auth, 'admin_create', claimed.idempotency, { id: createdUser.id, fullName, active: true }, result);
         } catch (error) {
-          await services.deleteAuthUser(createdUser.id).catch(() => {});
+          const reconciliation = await reconcileAmbiguousCompletion(services, auth, 'admin_create', claimed.idempotency);
+          if (reconciliation.completed) return sendJson(response, 201, reconciliation.completed);
+          if (!reconciliation.safeToCompensate) throw error;
+          let compensated = false;
+          try { await services.deleteAuthUser(createdUser.id); compensated = true; } catch {}
+          if (compensated) await releaseAfterCompensation(services, auth, 'admin_create', claimed.idempotency).catch(() => {});
           throw error;
         }
-        return sendJson(response, 201, {
-          admin: { id: createdUser.id, full_name: fullName, email: maskEmail(email), role: 'admin', active: true, status: 'active' },
-        });
+        return sendJson(response, 201, result);
       }
 
       const target = await loadTarget(body, auth, services);
@@ -243,18 +257,74 @@ export function createAdminsHandler({
       if (request.method === 'DELETE') {
         action = 'remove';
         if (body.confirmation !== 'REMOVE') return sendJson(response, 400, { error: 'Type REMOVE to confirm administrator removal.' });
-        const result = await setRemoved(target, services);
-        return sendJson(response, result.status, result.body);
+        const claimed = await claimAdminOperation(services, auth.profile.id, 'admin_remove', body, { id: target.id, confirmation: 'REMOVE' });
+        if (claimed.error) return sendJson(response, claimed.status, { error: claimed.error });
+        if (claimed.completed) return sendJson(response, 200, claimed.completed);
+        if (target.currentStatus === 'removed') {
+          const result = { success: true, status: 'removed' };
+          await completeAdminOperation(services, auth, 'admin_remove', claimed.idempotency, { ...target, active: false }, result);
+          return sendJson(response, 200, result);
+        }
+        try {
+          await services.updateAuthUser(target.id, { ban_duration: LONG_AUTH_BAN, app_metadata: metadataFor(target.authUser, 'removed') });
+          const result = { success: true, status: 'removed' };
+          await completeAdminOperation(services, auth, 'admin_remove', claimed.idempotency, { ...target, active: false }, result);
+          return sendJson(response, 200, result);
+        } catch (error) {
+          const reconciliation = await reconcileAmbiguousCompletion(services, auth, 'admin_remove', claimed.idempotency);
+          if (reconciliation.completed) return sendJson(response, 200, reconciliation.completed);
+          if (!reconciliation.safeToCompensate) throw error;
+          let compensated = false;
+          try {
+            await services.updateAuthUser(target.id, { ban_duration: target.currentStatus === 'active' ? 'none' : LONG_AUTH_BAN, app_metadata: metadataFor(target.authUser, target.currentStatus) });
+            compensated = true;
+          } catch {}
+          if (compensated) await releaseAfterCompensation(services, auth, 'admin_remove', claimed.idempotency).catch(() => {});
+          throw error;
+        }
       }
 
       action = String(body.action || 'password').toLowerCase();
       if (action === 'disable') {
-        const result = await setDisabled(target, services);
-        return sendJson(response, result.status, result.body);
+        if (target.currentStatus === 'removed') return sendJson(response, 409, { error: 'A removed administrator cannot be disabled.' });
+        const claimed = await claimAdminOperation(services, auth.profile.id, 'admin_disable', body, { id: target.id, action });
+        if (claimed.error) return sendJson(response, claimed.status, { error: claimed.error });
+        if (claimed.completed) return sendJson(response, 200, claimed.completed);
+        try {
+          await services.updateAuthUser(target.id, { ban_duration: LONG_AUTH_BAN, app_metadata: metadataFor(target.authUser, 'disabled') });
+          const result = { success: true, status: 'disabled' };
+          await completeAdminOperation(services, auth, 'admin_disable', claimed.idempotency, { ...target, active: false }, result);
+          return sendJson(response, 200, result);
+        } catch (error) {
+          const reconciliation = await reconcileAmbiguousCompletion(services, auth, 'admin_disable', claimed.idempotency);
+          if (reconciliation.completed) return sendJson(response, 200, reconciliation.completed);
+          if (!reconciliation.safeToCompensate) throw error;
+          let compensated = false;
+          try { await services.updateAuthUser(target.id, { ban_duration: target.currentStatus === 'active' ? 'none' : LONG_AUTH_BAN, app_metadata: metadataFor(target.authUser, target.currentStatus) }); compensated = true; } catch {}
+          if (compensated) await releaseAfterCompensation(services, auth, 'admin_disable', claimed.idempotency).catch(() => {});
+          throw error;
+        }
       }
       if (action === 'reactivate') {
-        const result = await setActive(target, services);
-        return sendJson(response, result.status, result.body);
+        if (target.currentStatus === 'removed') return sendJson(response, 409, { error: 'A removed administrator cannot be reactivated.' });
+        if (!target.authUser) return sendJson(response, 409, { error: 'This administrator no longer has an authentication account.' });
+        const claimed = await claimAdminOperation(services, auth.profile.id, 'admin_reactivate', body, { id: target.id, action });
+        if (claimed.error) return sendJson(response, claimed.status, { error: claimed.error });
+        if (claimed.completed) return sendJson(response, 200, claimed.completed);
+        try {
+          await services.updateAuthUser(target.id, { ban_duration: 'none', app_metadata: metadataFor(target.authUser, 'active') });
+          const result = { success: true, status: 'active' };
+          await completeAdminOperation(services, auth, 'admin_reactivate', claimed.idempotency, { ...target, active: true }, result);
+          return sendJson(response, 200, result);
+        } catch (error) {
+          const reconciliation = await reconcileAmbiguousCompletion(services, auth, 'admin_reactivate', claimed.idempotency);
+          if (reconciliation.completed) return sendJson(response, 200, reconciliation.completed);
+          if (!reconciliation.safeToCompensate) throw error;
+          let compensated = false;
+          try { await services.updateAuthUser(target.id, { ban_duration: LONG_AUTH_BAN, app_metadata: metadataFor(target.authUser, 'disabled') }); compensated = true; } catch {}
+          if (compensated) await releaseAfterCompensation(services, auth, 'admin_reactivate', claimed.idempotency).catch(() => {});
+          throw error;
+        }
       }
       if (action !== 'password') return sendJson(response, 400, { error: 'Unknown administrator action.' });
 
@@ -266,8 +336,13 @@ export function createAdminsHandler({
       const owner = await services.getProfile(auth.profile.id);
       if (!owner || owner.role !== 'owner' || !owner.active) return sendJson(response, 403, { error: 'Owner access is required.' });
       if (!verifyOwnerPinFn(ownerPin, owner.cancellation_pin_hash)) return sendJson(response, 403, { error: 'The Owner PIN is incorrect.' });
+      const claimed = await claimAdminOperation(services, auth.profile.id, 'admin_password', body, { id: target.id, password, ownerPin });
+      if (claimed.error) return sendJson(response, claimed.status, { error: claimed.error });
+      if (claimed.completed) return sendJson(response, 200, claimed.completed);
       await services.updateAuthUser(target.id, { password });
-      return sendJson(response, 200, { success: true });
+      const result = { success: true };
+      await completeAdminOperation(services, auth, 'admin_password', claimed.idempotency, { ...target, active: target.profile.active }, result);
+      return sendJson(response, 200, result);
     } catch (error) {
       console.error('[api/admins] failed', { method: request.method, action, code: error?.code || 'unknown' });
       return sendJson(response, 500, { error: 'The administrator request could not be completed. Please try again.' });

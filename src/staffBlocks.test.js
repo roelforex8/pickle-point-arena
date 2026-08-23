@@ -29,7 +29,9 @@ test('staff block requests use the current Supabase session and server endpoint'
   assert.equal(request.url, '/api/staff-blocks');
   assert.equal(request.options.method, 'POST');
   assert.equal(request.options.headers.Authorization, 'Bearer fresh-access-token');
-  assert.deepEqual(JSON.parse(request.options.body), payload);
+  const requestBody = JSON.parse(request.options.body);
+  assert.deepEqual({ action: requestBody.action, reason: requestBody.reason, selections: requestBody.selections }, payload);
+  assert.match(requestBody.idempotencyKey, /^[0-9a-f-]{36}$/i);
   assert.equal('from' in supabaseClient, false, 'the client does not need protected-table access');
 });
 

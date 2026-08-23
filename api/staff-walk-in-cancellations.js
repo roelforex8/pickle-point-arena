@@ -1,4 +1,5 @@
 import { requireStaff, sendJson } from './_supabase.js';
+import { idempotencyConflict, parseIdempotency, rpcResult } from './_idempotency.js';
 
 const bookingIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const forbiddenIdentityFields = new Set([
@@ -39,31 +40,36 @@ export function createStaffWalkInCancellationHandler({ requireStaffFn = requireS
       if (Object.keys(body).some((field) => forbiddenIdentityFields.has(field))) {
         return sendJson(response, 400, { error: 'Cancelling staff identity is determined from the authenticated session.' });
       }
-      if (Object.keys(body).some((field) => field !== 'bookingId')) {
+      if (Object.keys(body).some((field) => !['bookingId', 'idempotencyKey'].includes(field))) {
         return sendJson(response, 400, { error: 'Only a Walk-In booking identifier may be submitted.' });
       }
       const bookingId = String(body.bookingId || '');
       if (!bookingIdPattern.test(bookingId)) return sendJson(response, 400, { error: 'Choose a valid Walk-In booking.' });
 
-      const { data, error } = await auth.admin.rpc('cancel_staff_walk_in_booking', {
+      const idempotency = parseIdempotency(body, { bookingId });
+      if (idempotency.error) return sendJson(response, 400, { error: idempotency.error });
+      const { data, error } = await auth.admin.rpc('cancel_staff_walk_in_booking_idempotent', {
         p_cancelled_by: auth.profile.id,
         p_booking_id: bookingId,
+        p_idempotency_key: idempotency.key,
+        p_request_hash: idempotency.hash,
       });
       if (error) {
+        if (idempotencyConflict(error)) return sendJson(response, 409, { error: 'This request key was already used for a different cancellation.' });
         if (/staff_not_authorized/i.test(error.message || '')) return sendJson(response, 403, { error: 'This account is not authorized to cancel Walk-In bookings.' });
         if (cancellationConflict(error)) return sendJson(response, 409, { error: 'This Walk-In booking can no longer be cancelled.' });
         console.error('[api/staff-walk-in-cancellations] RPC failed', { code: error.code || 'unknown' });
         return sendJson(response, 500, { error: 'The Walk-In booking could not be cancelled. Please try again.' });
       }
 
-      const booking = Array.isArray(data) ? data[0] : data;
+      const booking = rpcResult(data);
       if (!booking) throw new Error('missing_walk_in_cancellation_result');
       return sendJson(response, 200, {
         booking: {
-          id: booking.booking_id,
-          trackingNumber: booking.tracking_number,
-          totalAmount: Number(booking.total_amount),
-          cancelledAt: booking.cancelled_at,
+          id: booking.bookingId,
+          trackingNumber: booking.trackingNumber,
+          totalAmount: Number(booking.totalAmount),
+          cancelledAt: booking.cancelledAt,
           status: 'cancelled',
           source: 'walk_in',
         },

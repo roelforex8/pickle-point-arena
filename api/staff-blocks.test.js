@@ -5,6 +5,7 @@ import { handler, selectionInterval } from './staff-blocks.js';
 
 const futureSelection = { date: '2030-01-15', hour: 6, courtId: 1 };
 const futureStart = '2030-01-14T22:00:00.000Z';
+const idempotencyKey = '11111111-1111-4111-8111-111111111111';
 const migrationSource = await readFile(new URL('../supabase/migrations/20260821010000_authoritative_court_occupancy.sql', import.meta.url), 'utf8');
 
 function responseRecorder() {
@@ -36,7 +37,7 @@ async function invoke({ role = 'owner', authError, body, adminState, notify = as
   const profile = { id: `${role}-id`, role, active: true, full_name: '' };
   const response = responseRecorder();
   await handler(
-    { method: 'POST', headers: { authorization: 'Bearer test-token' }, body },
+    { method: 'POST', headers: { authorization: 'Bearer test-token' }, body: { idempotencyKey, ...body } },
     response,
     { requireStaffFn: async () => authError || { admin, profile, user: { id: profile.id } }, notify },
   );
@@ -53,12 +54,14 @@ for (const role of ['owner', 'admin']) {
     assert.equal(response.statusCode, 200);
     assert.deepEqual(response.body, { changed: 1, skipped: 0 });
     assert.deepEqual(calls.rpc, [{
-      name: 'manage_staff_blocked_slots',
+      name: 'manage_staff_blocked_slots_idempotent',
       args: {
         p_created_by: `${role}-id`,
         p_action: 'block',
         p_reason: 'Maintenance',
         p_slots: [{ court_id: 1, slot_start: futureStart }],
+        p_idempotency_key: idempotencyKey,
+        p_request_hash: calls.rpc[0].args.p_request_hash,
       },
     }]);
   });

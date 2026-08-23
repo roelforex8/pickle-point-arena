@@ -1,5 +1,6 @@
 import { requireStaff, sendJson } from './_supabase.js';
 import { selectionInterval } from './staff-blocks.js';
+import { idempotencyConflict, parseIdempotency, rpcResult } from './_idempotency.js';
 
 const forbiddenIdentityFields = new Set([
   'created_by',
@@ -47,25 +48,31 @@ export function createStaffWalkInsHandler({ requireStaffFn = requireStaff } = {}
       const selections = [...unique.values()];
       if (selections.some((selection) => selection.startMs <= Date.now())) return sendJson(response, 400, { error: 'Past court-hours cannot be booked.' });
 
-      const { data, error } = await auth.admin.rpc('create_staff_walk_in_booking', {
+      const slots = selections.map((selection) => ({ court_id: selection.courtId, slot_start: new Date(selection.startMs).toISOString() }));
+      const idempotency = parseIdempotency(body, { slots });
+      if (idempotency.error) return sendJson(response, 400, { error: idempotency.error });
+      const { data, error } = await auth.admin.rpc('create_staff_walk_in_booking_idempotent', {
         p_created_by: auth.profile.id,
-        p_slots: selections.map((selection) => ({ court_id: selection.courtId, slot_start: new Date(selection.startMs).toISOString() })),
+        p_slots: slots,
+        p_idempotency_key: idempotency.key,
+        p_request_hash: idempotency.hash,
       });
       if (error) {
+        if (idempotencyConflict(error)) return sendJson(response, 409, { error: 'This request key was already used for a different Walk-In booking.' });
         if (conflictError(error)) return sendJson(response, 409, { error: 'One or more selected court-hours are no longer available. Nothing was booked.' });
         console.error('[api/staff-walk-ins] RPC failed', { code: error.code || 'unknown' });
         return sendJson(response, 500, { error: 'The Walk-In booking could not be created. Please try again.' });
       }
-      const booking = Array.isArray(data) ? data[0] : data;
+      const booking = rpcResult(data);
       if (!booking) throw new Error('missing_walk_in_result');
       return sendJson(response, 201, {
         booking: {
-          id: booking.booking_id,
-          trackingNumber: booking.tracking_number,
+          id: booking.bookingId,
+          trackingNumber: booking.trackingNumber,
           subtotal: Number(booking.subtotal),
-          bookingFee: Number(booking.booking_fee),
-          totalAmount: Number(booking.total_amount),
-          confirmedAt: booking.confirmed_at,
+          bookingFee: Number(booking.bookingFee),
+          totalAmount: Number(booking.totalAmount),
+          confirmedAt: booking.confirmedAt,
           source: 'walk_in',
         },
       });
