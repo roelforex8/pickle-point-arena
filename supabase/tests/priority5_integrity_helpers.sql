@@ -34,7 +34,7 @@ as $function$
   duplicate_audit as (
     select coalesce(sum(n - 1), 0)::bigint n from (
       select count(*) n from public.notifications
-      group by recipient_id, booking_id, kind, title, message having count(*) > 1
+      group by recipient_id, booking_id, kind, title, message, created_at having count(*) > 1
     ) d
   ),
   duplicate_idempotency as (
