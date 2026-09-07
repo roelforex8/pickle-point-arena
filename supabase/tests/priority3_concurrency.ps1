@@ -197,7 +197,10 @@ Run-ConcurrentScenario 'operating_hours_and_pricing_boundaries' {
   )
   Invoke-Db (OnlineSql $boundary) | Out-Null
   Invoke-Db (WalkInSql $walkBoundary) | Out-Null
-  Assert-Equal (Invoke-Db "select subtotal || '|' || booking_fee || '|' || total_amount from public.bookings where booking_source = 'online';").Output '1300.00|40.00|1340.00' 'Online pricing boundary.'
+  # This Priority #4 suite calls the trusted legacy function directly. Its
+  # preserved contract initializes a flat P10 fee; the Priority #5 wrapper's
+  # P10-per-hour correction is asserted by online_pricing_hotfix.sql.
+  Assert-Equal (Invoke-Db "select subtotal || '|' || booking_fee || '|' || total_amount from public.bookings where booking_source = 'online';").Output '1300.00|10.00|1310.00' 'Legacy online pricing boundary.'
   Assert-Equal (Invoke-Db "select subtotal || '|' || booking_fee || '|' || total_amount from public.bookings where booking_source = 'walk_in';").Output '1300.00|0.00|1300.00' 'Walk-In pricing boundary.'
   $invalid05 = Invoke-Db (OnlineSql @(@{ court_id = 3; slot_start = $h05 })) -AllowFailure
   $invalid24 = Invoke-Db (WalkInSql @(@{ court_id = 3; slot_start = $h24 })) -AllowFailure

@@ -121,7 +121,14 @@ create or replace function public.create_public_booking(
   p_customer_email text,
   p_slots jsonb
 )
-returns table(booking_id uuid, tracking_number text)
+returns table(
+  booking_id uuid,
+  tracking_number text,
+  subtotal numeric,
+  booking_fee numeric,
+  total_amount numeric,
+  hold_expires_at timestamptz
+)
 language plpgsql
 security definer
 set search_path = pg_catalog, public, private, extensions
@@ -168,7 +175,11 @@ begin
   end loop;
 
   update public.bookings set subtotal = v_subtotal where id = v_booking_id;
-  return query select v_booking_id, v_tracking;
+  return query
+  select b.id, b.tracking_number, b.subtotal, b.booking_fee,
+         b.total_amount, b.hold_expires_at
+  from public.bookings b
+  where b.id = v_booking_id;
 end;
 $function$;
 

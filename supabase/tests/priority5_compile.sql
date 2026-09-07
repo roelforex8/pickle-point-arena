@@ -6,6 +6,7 @@
 \ir ../migrations/20260821010000_authoritative_court_occupancy.sql
 \ir ../migrations/20260822010000_transactional_idempotent_operations.sql
 \ir ../migrations/20260822020000_idempotent_staff_and_admin_operations.sql
+\ir ../migrations/20260907010000_fix_online_booking_4pm_rate.sql
 \ir priority5_integrity_helpers.sql
 
 select count(*) = 11 as priority5_rpc_count
