@@ -4,6 +4,7 @@ import test from 'node:test';
 import { createStaffWalkInsHandler } from './staff-walk-ins.js';
 
 const migrationSource = await readFile(new URL('../supabase/migrations/20260820020000_add_walk_in_bookings.sql', import.meta.url), 'utf8');
+const customerNameMigrationSource = await readFile(new URL('../supabase/migrations/20260922010000_add_walk_in_customer_name.sql', import.meta.url), 'utf8');
 const onlineBookingSource = await readFile(new URL('./bookings.js', import.meta.url), 'utf8');
 const idempotencyKey = '11111111-1111-4111-8111-111111111111';
 
@@ -37,18 +38,20 @@ const validSelections = [
   { date: '2099-01-15', hour: 15, courtId: 1 },
   { date: '2099-01-15', hour: 16, courtId: 2 },
 ];
+const customerName = '  Juan Dela Cruz  ';
 
 for (const role of ['admin', 'owner']) {
   test(`active ${role} can create a Walk-In using the server-verified profile`, async () => {
     const subject = authenticatedSubject({ role });
     const handler = createStaffWalkInsHandler({ requireStaffFn: async () => subject.auth });
     const response = responseRecorder();
-    await handler({ method: 'POST', body: { selections: validSelections, idempotencyKey }, headers: {} }, response);
+    await handler({ method: 'POST', body: { selections: validSelections, customerName, idempotencyKey }, headers: {} }, response);
     assert.equal(response.statusCode, 201);
     assert.equal(response.body.booking.bookingFee, 0);
     assert.equal(response.body.booking.totalAmount, 650);
     assert.equal(subject.calls.rpc[0].name, 'create_staff_walk_in_booking_idempotent');
     assert.equal(subject.calls.rpc[0].payload.p_created_by, 'verified-profile-id');
+    assert.equal(subject.calls.rpc[0].payload.p_customer_name, 'Juan Dela Cruz');
     assert.equal('p_created_by' in response.body.booking, false);
   });
 }
@@ -71,7 +74,7 @@ test('client-supplied administrator identity is rejected before RPC execution', 
     const subject = authenticatedSubject();
     const handler = createStaffWalkInsHandler({ requireStaffFn: async () => subject.auth });
     const response = responseRecorder();
-    await handler({ method: 'POST', body: { selections: validSelections, [field]: 'impersonated-admin' }, headers: {} }, response);
+    await handler({ method: 'POST', body: { selections: validSelections, customerName, [field]: 'impersonated-admin' }, headers: {} }, response);
     assert.equal(response.statusCode, 400, field);
     assert.equal(subject.calls.rpc.length, 0, field);
   }
@@ -81,14 +84,14 @@ test('duplicate selections are rejected and database conflicts return safe 409 r
   const subject = authenticatedSubject();
   const handler = createStaffWalkInsHandler({ requireStaffFn: async () => subject.auth });
   const duplicateResponse = responseRecorder();
-  await handler({ method: 'POST', body: { selections: [validSelections[0], validSelections[0]] }, headers: {} }, duplicateResponse);
+  await handler({ method: 'POST', body: { selections: [validSelections[0], validSelections[0]], customerName }, headers: {} }, duplicateResponse);
   assert.equal(duplicateResponse.statusCode, 400);
   assert.equal(subject.calls.rpc.length, 0);
 
   const conflictSubject = authenticatedSubject({ rpcError: { code: 'P0001', message: 'A selected court-hour is blocked by the venue.' } });
   const conflictHandler = createStaffWalkInsHandler({ requireStaffFn: async () => conflictSubject.auth });
   const conflictResponse = responseRecorder();
-  await conflictHandler({ method: 'POST', body: { selections: validSelections, idempotencyKey }, headers: {} }, conflictResponse);
+  await conflictHandler({ method: 'POST', body: { selections: validSelections, customerName, idempotencyKey }, headers: {} }, conflictResponse);
   assert.equal(conflictResponse.statusCode, 409);
   assert.doesNotMatch(conflictResponse.body.error, /postgres|constraint|P0001/i);
 });
@@ -105,7 +108,7 @@ test('only POST is allowed and malformed or oversized requests are rejected', as
   assert.equal(malformedResponse.statusCode, 400);
 
   const oversizedResponse = responseRecorder();
-  await handler({ method: 'POST', body: { selections: Array.from({ length: 501 }, () => validSelections[0]) }, headers: {} }, oversizedResponse);
+  await handler({ method: 'POST', body: { selections: Array.from({ length: 501 }, () => validSelections[0]), customerName }, headers: {} }, oversizedResponse);
   assert.equal(oversizedResponse.statusCode, 400);
   assert.equal(subject.calls.rpc.length, 0);
 });
@@ -140,7 +143,7 @@ test('one parent Walk-In supports consecutive, non-consecutive, and multiple-cou
   const subject = authenticatedSubject();
   const handler = createStaffWalkInsHandler({ requireStaffFn: async () => subject.auth });
   const response = responseRecorder();
-  await handler({ method: 'POST', body: { selections, idempotencyKey }, headers: {} }, response);
+  await handler({ method: 'POST', body: { selections, customerName, idempotencyKey }, headers: {} }, response);
   assert.equal(response.statusCode, 201);
   assert.deepEqual(subject.calls.rpc[0].payload.p_slots.map((slot) => ({ courtId: slot.court_id, start: slot.slot_start })), [
     { courtId: 1, start: '2099-01-15T00:00:00.000Z' },
@@ -149,4 +152,24 @@ test('one parent Walk-In supports consecutive, non-consecutive, and multiple-cou
     { courtId: 2, start: '2099-01-15T01:00:00.000Z' },
   ]);
   assert.match(migrationSource, /for v_item in[\s\S]+insert into public\.booking_slots[\s\S]+v_subtotal := v_subtotal \+ v_rate;/i);
+});
+
+test('Walk-In customer name is trimmed, validated, included in the idempotency payload, and never returned by creation', async () => {
+  const subject = authenticatedSubject();
+  const handler = createStaffWalkInsHandler({ requireStaffFn: async () => subject.auth });
+  const first = responseRecorder();
+  const retry = responseRecorder();
+  await handler({ method: 'POST', body: { selections: validSelections, customerName, idempotencyKey }, headers: {} }, first);
+  await handler({ method: 'POST', body: { selections: validSelections, customerName, idempotencyKey }, headers: {} }, retry);
+  assert.equal(subject.calls.rpc[0].payload.p_request_hash, subject.calls.rpc[1].payload.p_request_hash);
+  assert.equal(subject.calls.rpc[0].payload.p_customer_name, 'Juan Dela Cruz');
+  assert.equal('customerName' in first.body.booking, false);
+
+  const invalid = responseRecorder();
+  await handler({ method: 'POST', body: { selections: validSelections, customerName: ' ', idempotencyKey }, headers: {} }, invalid);
+  assert.equal(invalid.statusCode, 400);
+  assert.equal(subject.calls.rpc.length, 2);
+  assert.match(customerNameMigrationSource, /walk_in_customer_name text/i);
+  assert.match(customerNameMigrationSource, /length\(v_customer_name\) not between 2 and 120/i);
+  assert.match(customerNameMigrationSource, /private\.claim_idempotency[\s\S]+create_staff_walk_in_booking\(p_created_by, p_slots, p_customer_name\)/i);
 });

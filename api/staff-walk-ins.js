@@ -14,6 +14,11 @@ const forbiddenIdentityFields = new Set([
   'role',
 ]);
 
+function walkInCustomerName(value) {
+  const name = String(value || '').trim();
+  return name.length >= 2 && name.length <= 120 ? name : null;
+}
+
 function conflictError(error) {
   return /blocked|no longer available|overlap|conflict/i.test(error?.message || '');
 }
@@ -38,6 +43,8 @@ export function createStaffWalkInsHandler({ requireStaffFn = requireStaff } = {}
       if (Object.keys(body).some((field) => forbiddenIdentityFields.has(field))) {
         return sendJson(response, 400, { error: 'Administrator identity is determined from the authenticated session.' });
       }
+      const customerName = walkInCustomerName(body.customerName);
+      if (!customerName) return sendJson(response, 400, { error: 'Enter a customer or reservation name between 2 and 120 characters.' });
 
       const requested = Array.isArray(body.selections) ? body.selections : [];
       if (!requested.length || requested.length > 500) return sendJson(response, 400, { error: 'Select between 1 and 500 valid court-hours.' });
@@ -49,11 +56,12 @@ export function createStaffWalkInsHandler({ requireStaffFn = requireStaff } = {}
       if (selections.some((selection) => selection.startMs <= Date.now())) return sendJson(response, 400, { error: 'Past court-hours cannot be booked.' });
 
       const slots = selections.map((selection) => ({ court_id: selection.courtId, slot_start: new Date(selection.startMs).toISOString() }));
-      const idempotency = parseIdempotency(body, { slots });
+      const idempotency = parseIdempotency(body, { customerName, slots });
       if (idempotency.error) return sendJson(response, 400, { error: idempotency.error });
       const { data, error } = await auth.admin.rpc('create_staff_walk_in_booking_idempotent', {
         p_created_by: auth.profile.id,
         p_slots: slots,
+        p_customer_name: customerName,
         p_idempotency_key: idempotency.key,
         p_request_hash: idempotency.hash,
       });

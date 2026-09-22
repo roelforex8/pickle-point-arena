@@ -12,6 +12,7 @@ test('admin batch selection retains blocking and adds the Walk-In review flow', 
   assert.match(appSource, />Walk-In<\/button>/);
   assert.match(appSource, />Block selected<\/button>/);
   assert.match(appSource, /Review Walk-In booking/);
+  assert.match(appSource, /Customer \/ Reservation Name<input value=\{walkInCustomerName\}/);
   assert.match(appSource, /Court-hours<strong>\{walkInSummary\.courtHours\}/);
   assert.match(appSource, /Booking fee<strong>₱0<\/strong>/);
   assert.match(appSource, /Total amount<strong>₱\{walkInSummary\.totalAmount/);
@@ -22,13 +23,13 @@ test('admin batch selection retains blocking and adds the Walk-In review flow', 
 test('admin schedule identifies Walk-In while public availability remains ordinary booked state', () => {
   assert.match(staffScheduleSource, /booking_source/);
   assert.match(appSource, /booking_source === 'walk_in' \? 'walkIn' : 'booked'/);
-  assert.match(appSource, /walkIn: \{ label: 'Confirmed Walk-In booking', short: 'Walk-In' \}/);
+  assert.match(appSource, /walkIn: \{ label: 'Confirmed Walk-In booking', short: 'WALK-IN' \}/);
   assert.doesNotMatch(publicAvailabilitySource, /booking_source|walk_in|Walk-In/);
   assert.match(publicAvailabilitySource, /: 'booked';/);
 });
 
 test('Walk-In client submits slots only and does not enter payment or receipt flows', () => {
-  assert.match(walkInClientSource, /body: JSON\.stringify\(\{ selections, idempotencyKey \}\)/);
+  assert.match(walkInClientSource, /body: JSON\.stringify\(\{ selections, customerName, idempotencyKey \}\)/);
   assert.doesNotMatch(walkInClientSource, /created_by|confirmed_by|payment|receipt/i);
 });
 
@@ -61,5 +62,13 @@ test('cancelled Walk-In slots disappear from both active schedule surfaces witho
 });
 
 test('staff schedule includes full Walk-In details for multi-slot cancellation review', () => {
-  assert.match(staffScheduleSource, /booking_source, total_amount, booking_slots\(court_id, slot_start, slot_end, status\)/);
+  assert.match(staffScheduleSource, /walk_in_customer_name/);
+  assert.match(appSource, /Customer: \$\{selectedBooking\.row\?\.bookings\?\.walk_in_customer_name \|\| 'Name not recorded'\}/);
+  assert.match(appSource, /selectedBooking\.status === 'walkIn' \? 'WALK-IN'/);
+});
+
+test('public availability and booking APIs never select or return the Walk-In customer name', async () => {
+  const publicBookingSource = await readFile(new URL('../api/bookings.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(publicAvailabilitySource, /walk_in_customer_name|customerName/i);
+  assert.doesNotMatch(publicBookingSource, /walk_in_customer_name/i);
 });

@@ -16,15 +16,16 @@ test('Walk-In pricing changes at 4 PM and never adds a booking fee', () => {
   });
 });
 
-test('Walk-In requests send only selections with the current authenticated session', async () => {
+test('Walk-In requests send the customer name and selections with the current authenticated session', async () => {
   let request;
   const client = { auth: { getSession: async () => ({ data: { session: { access_token: 'verified-token' } }, error: null }) } };
   const selections = [{ date: '2030-01-15', hour: 16, courtId: 2 }];
-  await postStaffWalkIn(client, selections, async (url, options) => { request = { url, options }; return { ok: true }; });
+  await postStaffWalkIn(client, selections, 'Juan Dela Cruz', async (url, options) => { request = { url, options }; return { ok: true }; });
   assert.equal(request.url, '/api/staff-walk-ins');
   assert.equal(request.options.headers.Authorization, 'Bearer verified-token');
   const requestBody = JSON.parse(request.options.body);
   assert.deepEqual(requestBody.selections, selections);
+  assert.equal(requestBody.customerName, 'Juan Dela Cruz');
   assert.match(requestBody.idempotencyKey, /^[0-9a-f-]{36}$/i);
   assert.doesNotMatch(request.options.body, /created|confirmed|admin|role/i);
 });

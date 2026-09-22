@@ -1,6 +1,7 @@
 import { requireStaff, sendJson } from './_supabase.js';
 
-export default async function handler(request, response) {
+export function createStaffScheduleHandler({ requireStaffFn = requireStaff } = {}) {
+  return async function handler(request, response) {
   response.setHeader('Cache-Control', 'no-store, max-age=0');
   if (request.method !== 'GET') {
     response.setHeader('Allow', 'GET');
@@ -8,7 +9,7 @@ export default async function handler(request, response) {
   }
 
   try {
-    const auth = await requireStaff(request);
+    const auth = await requireStaffFn(request);
     if (auth.error) return sendJson(response, auth.status, { error: auth.error });
     const from = new Date(String(request.query?.from || ''));
     const to = new Date(String(request.query?.to || ''));
@@ -16,7 +17,7 @@ export default async function handler(request, response) {
     if (!Number.isFinite(duration) || duration <= 0 || duration > 8 * 86400000) return sendJson(response, 400, { error: 'Choose a valid schedule range.' });
 
     const [{ data: slots, error: slotError }, { data: blocks, error: blockError }] = await Promise.all([
-      auth.admin.from('booking_slots').select('booking_id, court_id, slot_start, slot_end, status, bookings(tracking_number, customer_name, customer_email, status, hold_expires_at, booking_source, total_amount, booking_slots(court_id, slot_start, slot_end, status))').gte('slot_start', from.toISOString()).lt('slot_start', to.toISOString()).in('status', ['held', 'payment_submitted', 'confirmed']),
+      auth.admin.from('booking_slots').select('booking_id, court_id, slot_start, slot_end, status, bookings(tracking_number, customer_name, customer_email, walk_in_customer_name, status, hold_expires_at, booking_source, total_amount, booking_slots(court_id, slot_start, slot_end, status))').gte('slot_start', from.toISOString()).lt('slot_start', to.toISOString()).in('status', ['held', 'payment_submitted', 'confirmed']),
       auth.admin.from('blocked_slots').select('id, court_id, starts_at, ends_at, reason').lt('starts_at', to.toISOString()).gt('ends_at', from.toISOString()),
     ]);
     if (slotError || blockError) throw slotError || blockError;
@@ -30,4 +31,7 @@ export default async function handler(request, response) {
   } catch (error) {
     return sendJson(response, 500, { error: error.message || 'The staff schedule could not be loaded.' });
   }
+  };
 }
+
+export default createStaffScheduleHandler();

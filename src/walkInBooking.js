@@ -12,16 +12,16 @@ export function walkInBookingSummary(selections = []) {
   return { items, courtHours: items.length, subtotal, bookingFee: 0, totalAmount: subtotal };
 }
 
-export async function postStaffWalkIn(supabaseClient, selections, fetchImpl = fetch) {
+export async function postStaffWalkIn(supabaseClient, selections, customerName, fetchImpl = fetch) {
   const { data, error } = await supabaseClient.auth.getSession();
   const accessToken = data?.session?.access_token;
   if (error || !accessToken) throw new Error('Your session is no longer valid. Sign in again and retry.');
   const operation = 'staff-walk-in-create';
-  const idempotencyKey = pendingIdempotencyKey(operation, { selections });
+  const idempotencyKey = pendingIdempotencyKey(operation, { selections, customerName });
   const response = await fetchImpl('/api/staff-walk-ins', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({ selections, idempotencyKey }),
+    body: JSON.stringify({ selections, customerName, idempotencyKey }),
   });
   if (response.ok) completeIdempotentOperation(operation, idempotencyKey);
   return response;
